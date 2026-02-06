@@ -7,7 +7,11 @@ reported in the manuscript.
 本リポジトリは、CONJ プレプリント論文に記載された
 **数値実験の再現専用リポジトリ**です。
 
----
+- `paper/`   : LaTeX source and compiled paper PDF
+- `scripts/` : reproducibility scripts
+- `assets/`  : input assets (see also `assets/ASSETS_LICENSE.md`)
+- `results/` : bundled example metrics JSON
+- `.github/workflows/` : CI smoke check workflow
 
 ## Paper / 論文
 
@@ -133,7 +137,9 @@ See `LICENSE` for details.
 * **No FTO (freedom-to-operate) search is provided.**
 * Nothing here constitutes legal advice.
 
----
+* Code: Apache License 2.0 (see `LICENSE`)
+* Paper text/figures: see `paper/`
+* Photo asset(s): see `assets/ASSETS_LICENSE.md`
 
 ## Versioning
 
