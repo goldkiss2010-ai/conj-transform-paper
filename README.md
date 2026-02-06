@@ -6,7 +6,7 @@ This repository contains the LaTeX source of the paper and minimal scripts to re
 
 - `paper/`   : LaTeX source
 - `scripts/` : reproducibility scripts
-- `assets/`  : input assets (see also `assets/README.md`)
+- `assets/`  : input assets (see also `assets/ASSETS_LICENSE.md`)
 - `output/` : example outputs (JSON)
 
 ## Requirements
@@ -55,7 +55,7 @@ python scripts/conj_experiment.py
 
 * Code: Apache License 2.0 (see `LICENSE`)
 * Paper text/figures: see `paper/`
-* Photo asset(s): see `assets/README.md`
+* Photo asset(s): see `assets/ASSETS_LICENSE.md`
 
 See `NOTICE` for disclaimers (no warranty, no FTO search, etc.).
 
