@@ -1,0 +1,88 @@
+\begin{thebibliography}{13}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[{Commission Internationale de l'{\'E}clairage (CIE)}(2018)]{cie15_2018}
+{Commission Internationale de l'{\'E}clairage (CIE)}.
+\newblock \emph{Colorimetry, 4th Edition}.
+\newblock CIE 15:2018. CIE, 2018.
+
+\bibitem[{Commission Internationale de l'{\'E}clairage (CIE)}(1976)]{cie1976lab}
+{Commission Internationale de l'{\'E}clairage (CIE)}.
+\newblock Official recommendations on uniform color spaces, color difference equations and metric color terms.
+\newblock CIE Publication CIE 15, Supplement 2, CIE, 1976.
+
+\bibitem[{International Electrotechnical Commission}(1999)]{iec61966-2-1}
+{International Electrotechnical Commission}.
+\newblock Multimedia systems and equipment -- colour measurement and management -- part 2-1: Colour management -- default rgb colour space -- srgb.
+\newblock IEC 61966-2-1, 1999.
+
+\bibitem[Reinhard et~al.(2005)Reinhard, Ward, Pattanaik, and Debevec]{reinhard2005hdr}
+Erik Reinhard, Greg Ward, Sumanta Pattanaik, and Paul Debevec.
+\newblock \emph{High Dynamic Range Imaging: Acquisition, Display, and Image-Based Lighting}.
+\newblock Morgan Kaufmann, 2005.
+
+\bibitem[Mantiuk et~al.(2009)Mantiuk, Mantiuk, Tomaszewska, and Heidrich]{mantiuk2009cctm}
+Rados{\l}aw Mantiuk, Rafa{\l} Mantiuk, Anna Tomaszewska, and Wolfgang Heidrich.
+\newblock Color correction for tone mapping.
+\newblock \emph{Computer Graphics Forum}, 28\penalty0 (2):\penalty0 193--202, 2009.
+\newblock \doi{10.1111/j.1467-8659.2009.01358.x}.
+\newblock Proc. Eurographics 2009.
+
+\bibitem[Mehmood et~al.(2024)Mehmood, Khan, and Luo]{mehmood2024generic_cc}
+Imran Mehmood, Muhammad~Usman Khan, and Mingronnier Luo.
+\newblock Generic color correction for tone mapping operators in high dynamic range imaging.
+\newblock \emph{Optics Express}, 32\penalty0 (16):\penalty0 27849--27866, 2024.
+\newblock \doi{10.1364/OE.527492}.
+
+\bibitem[{International Telecommunication Union}(2018)]{itur_bt2100}
+{International Telecommunication Union}.
+\newblock {Recommendation ITU-R BT.2100-2}: Image parameter values for high dynamic range television for use in production and international programme exchange.
+\newblock Technical Report BT.2100-2, ITU-R, July 2018.
+\newblock URL \url{https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-2-201807-I%21%21PDF-E.pdf}.
+\newblock Accessed 2025-12-19.
+
+\bibitem[{International Telecommunication Union}(2011)]{itur_bt601}
+{International Telecommunication Union}.
+\newblock {Recommendation ITU-R BT.601-7}: Studio encoding parameters of digital television for standard 4:3 and wide-screen 16:9 aspect ratios.
+\newblock Technical Report BT.601-7, ITU-R, March 2011.
+\newblock URL \url{https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.601-7-201103-I!!PDF-E.pdf}.
+\newblock Accessed 2025-12-19.
+
+\bibitem[{International Telecommunication Union}(2015)]{itur_bt709}
+{International Telecommunication Union}.
+\newblock {Recommendation ITU-R BT.709-6}: Parameter values for the hdtv standards for production and international programme exchange.
+\newblock Technical Report BT.709-6, ITU-R, June 2015.
+\newblock URL \url{https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.709-6-201506-I!!PDF-E.pdf}.
+\newblock Accessed 2025-12-19.
+
+\bibitem[Ebner and Fairchild(1998)]{ebner1998ipt}
+Felix Ebner and Mark~D. Fairchild.
+\newblock Development and testing of a color space (ipt) with improved hue uniformity.
+\newblock In \emph{Proceedings of the 6th Color Imaging Conference: Color Science, Systems and Applications}, pages 8--13. Society for Imaging Science and Technology (IS\&T), 1998.
+\newblock IS\&T/SID Color Imaging Conference.
+
+\bibitem[{Dolby Laboratories}(2016)]{dolby2016ictcp}
+{Dolby Laboratories}.
+\newblock {ICtCp}: A new color representation for hdr imaging.
+\newblock White paper, 2016.
+\newblock URL \url{https://professional.dolby.com/siteassets/pdfs/ictcp_dolbywhitepaper_v071.pdf}.
+\newblock Version 0.7.1, accessed 2025-12-19.
+
+\bibitem[Ottosson(2020)]{ottosson2020oklab}
+Bj{\"o}rn Ottosson.
+\newblock Oklab: A perceptual color space for image processing.
+\newblock Online article, 2020.
+\newblock URL \url{https://bottosson.github.io/posts/oklab/}.
+\newblock Accessed 2025-12-19.
+
+\bibitem[Larson(1998)]{larson1998logluv}
+Greg~Ward Larson.
+\newblock The logluv encoding for full gamut, high dynamic range images.
+\newblock \emph{Journal of Graphics Tools}, 3\penalty0 (1):\penalty0 15--31, 1998.
+\newblock \doi{10.1080/10867651.1998.10487485}.
+
+\end{thebibliography}

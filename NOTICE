@@ -1,0 +1,23 @@
+NOTICE
+
+This repository is provided for research and reproducibility purposes.
+
+License
+- Unless otherwise stated, the code in this repository is licensed under the Apache License, Version 2.0.
+  See the LICENSE file.
+
+No Freedom-to-Operate (FTO) search
+- No Freedom-to-Operate (FTO) search is provided here.
+  Users are responsible for any IP clearance, patent searches, and legal compliance necessary for their use case.
+
+No warranty
+- This repository is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the LICENSE file for the specific language governing permissions
+  and limitations under the License.
+
+Third-party materials
+- This repository may reference external standards and publications. Any trademarks, standards,
+  and third-party works remain the property of their respective owners.
+
+Assets
+- See assets/README.md for the license and usage conditions of bundled image asset(s).

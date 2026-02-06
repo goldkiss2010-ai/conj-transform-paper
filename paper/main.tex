@@ -1,0 +1,1170 @@
+\documentclass[dvipdfmx]{jsarticle}
+
+% =========================================================
+% Packages
+% =========================================================
+\usepackage{amsmath,amssymb}
+\usepackage{amsthm}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{bm}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc}
+
+% Citations / references
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[dvipdfmx,bookmarks=true,bookmarksnumbered=true]{hyperref}
+\IfFileExists{pxjahyper.sty}{\usepackage{pxjahyper}}{} % Japanese bookmarks (optional)
+
+% =========================================================
+% Theorem environments
+% =========================================================
+\newtheorem{definition}{定義}[section]
+\newtheorem{proposition}{命題}[section]
+\newtheorem{theorem}{定理}[section]
+\newtheorem{lemma}{補題}[section]
+\renewcommand{\proofname}{証明}
+
+% =========================================================
+% Title
+% =========================================================
+\title{CONJ Transform：正規化双対ペアに基づく 1+2 分解と\mbox{クロストーク}抑制}
+\author{横田新之介（横田ブンガク）}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% =========================================================
+\begin{abstract}
+多くの色空間および画像・映像処理パイプラインは，
+三次元色信号を「主軸 1 次元＋残差 2 次元」に分解する $1+2$ 構造を採用する．
+しかし，ガンマ補正，トーンマッピング，ロールオフ等の非線形処理を主軸方向に行うと，
+主軸操作に伴って残差（クロマ）が変動するクロマシフト（クロストーク）が一般に生じる．
+
+本稿は，作業空間を任意の三次元実ベクトル空間 $V$ として扱い，
+正規化条件 $\ell(u)=1$ を満たす組 $(u,\ell)\in V\times V^*$（正規化双対ペア）に基づき，
+\[
+  x=\ell(x)u+r(x),\qquad r(x):=x-\ell(x)u\in\ker\ell
+\]
+という $1+2$ 分割 $V=\mathrm{span}(u)\oplus\ker\ell$ を導入する．
+この分割に沿って主軸スカラー $\ell(x)$ のみに任意の 1 変数非線形 $\varphi$ を適用する写像
+\[
+  T_\varphi(x)=\varphi(\ell(x))u+r(x)
+\]
+（CONJ 変換）を定義し，射影 $P(x):=x-\ell(x)u$ に対して
+\[
+  P(T_\varphi(x))=P(x)
+\]
+が任意の $\varphi$ で常に成り立つことを示す．
+すなわち，分割（主軸と残差部分空間の選択）と正規化のみから，
+非線形主軸操作下でも残差を幾何学的に不変に保つための設計条件が得られる．
+
+一様乱数サンプルおよび実写画像に対する数値実験では，従来型パイプライン（例：ガンマ後の Y′CbCr 操作，CIELAB 明度操作）において，
+一様乱数では $10^{-2}$ オーダー，実写画像でも $10^{-3}$ オーダーのクロストークが観測される一方，
+提案法では倍精度浮動小数点演算の丸め誤差レベルまで低減されることを確認した．
+
+本枠組みは特定の基準刺激空間（XYZ 等）や特定の実装パイプラインを前提とせず，
+任意の 3 チャネル作業空間に対して
+トーン操作を「主軸方向の 1 次元写像」として分離し，
+各点における残差 2 次元成分を保存する設計原理を与える．
+一方で，ガマット制約，クリッピング，量子化など線分全体や実装条件に依存する問題を直接解くものではなく，
+トーン操作段における幾何学的整合性（主軸と残差の独立性）を強い形で保証することに射程を限定する．
+\end{abstract}
+
+
+\section{はじめに}
+
+デジタル画像・映像の処理および符号化では，三次元の色信号を
+1 次元の輝度成分と 2 次元のクロマ成分に分解する $1+2$ 構造が広く用いられている．
+YCbCr 系の色差表現や，知覚空間（CIELAB など）における明度・色度の分離はその典型例である
+\cite{cie15_2018,cie1976lab,iec61966-2-1}．
+一方，実運用ではガンマ補正，トーンマッピング，ロールオフ，HDR/SDR マッピングなどの
+非線形処理が不可避であり \cite{reinhard2005hdr}，
+輝度操作に伴ってクロマ成分が変動する（クロマシフト）現象がしばしば問題となる
+\cite{mantiuk2009cctm,mehmood2024generic_cc}.
+これに対し，トーンマッピング後の色補正や彩度調整が提案されてきたが，
+色外観の保持と輝度圧縮の両立には手動調整やトレードオフを伴うことが多い
+\cite{mantiuk2009cctm,mehmood2024generic_cc}.
+
+
+本稿ではクロマシフトを，特定の色空間の限界としてではなく，
+\emph{「どの段階で $1+2$ に分割し，どの成分に非線形を適用するか」}
+という \emph{演算順序}の問題として捉える．
+同じ三次元信号 $V$ 上の処理であっても，
+\begin{itemize}
+  \item 分割の後に主軸スカラーのみに非線形を作用させる（$S\to N1$）
+  \item 3 成分へ先に非線形を作用させてから分割する（$N3\to S$）
+\end{itemize}
+の差が，輝度・クロマ間のクロストークの有無を本質的に左右する．
+
+本稿の中心は，作業空間を任意の三次元実ベクトル空間 $V$ とし，
+正規化条件 $\ell(u)=1$ を満たす $(u,\ell)\in V\times V^*$ を固定して
+\[
+  r(x):=x-\ell(x)u,\qquad r(x)\in\ker\ell
+\]
+により信号を分割し，主軸スカラー $\ell(x)$ のみに任意の 1 変数非線形 $\varphi$ を作用させる
+\[
+  T_\varphi(x):=\varphi(\ell(x))u+r(x)
+\]
+という写像（CONJ 変換）を定義する点にある．
+このとき射影 $P(x):=x-\ell(x)u$ に対して
+\[
+  P(T_\varphi(x))=P(x)
+\]
+が常に成り立ち，残差（クロマ）は $\varphi$ の具体形に依存せず厳密に不変となる．
+以降，$r(x)$ を「残差（残差成分）」，$\ker\ell$ を「残差部分空間」と呼ぶ．
+
+本稿の貢献は次の三点に整理できる．
+\begin{enumerate}
+  \item 正規化双対ペア $\ell(u)=1$ に基づく $1+2$ 分割を導入し，
+        分割と一軸非線形の合成として CONJ 変換 $T_\varphi$ を定義した．
+  \item 残差不変性 $P(T_\varphi(x))=P(x)$ が $\varphi$ の具体形に依存しないことを示し，
+        非線形主軸操作下のクロストークを構造的にゼロ化する設計条件を与えた．
+  \item 一様乱数サンプルおよび実写画像において，
+        従来型（非線形空間で分解・操作する）パイプラインで観測される残差変動に対し，
+        CONJ 型が倍精度計算の丸め誤差レベルまで低減することを確認した．
+\end{enumerate}
+
+\paragraph{Scope and limitations.}
+本稿で扱う CONJ 変換は，3 チャネル信号に対するトーン操作を
+主軸方向の 1 次元写像として定式化し，
+各点における残差 2 次元成分（クロマ）を厳密に保存することを目的とする．
+したがって，本枠組みはガマット制約，クリッピング，量子化，あるいは
+線分全体の交差や端点挙動といった問題を直接解決するものではない．
+これらは本手法と直交する設計課題であり，
+本稿はトーン操作段における輝度・クロマ分離の幾何学的整合性を
+強い条件で保証する設計原理を与えることに射程を限定する．
+
+
+% =========================================================
+\section{提案手法：CONJ 変換}
+
+\subsection{信号空間と前提}
+本論文では，作業色空間上の画素値を三つ組の実数として扱う．対象とする信号は三つの成分をもつ任意の
+3 チャネル信号であり，これらを三次元実ベクトル空間 $V$ の元としてみなす．
+ここでは，どの基底を用いるか（RGB か XYZ か Lab か），あるいはどの内積を採用するかは仮定しない．
+必要なのは「$V$ が三次元の線形空間である」という最小限の構造だけである．
+
+本章の目的は，$V$ の中で
+\begin{itemize}
+\item 主軸（輝度／ニュートラル軸として扱う方向）を表すベクトル $u\in V$，
+\item その主軸方向に沿ったスカラー成分を読み取る線形汎関数 $\ell\in V^*:=\mathrm{Hom}(V,\mathbb{R})$，
+\end{itemize}
+の組 $(u,\ell)$ を選び，信号を 1 次元の主軸成分と 2 次元の残差成分に分け，その上に CONJ 変換を定義することである．
+主張の要点は「非線形処理をどこに置くか」よりも先に，「主軸 $u$ と読み取り $\ell$（すなわち $1+2$ 分割の仕方）をどう選ぶか」が決定的である，という点にある．
+
+\subsection{主軸と残差平面：$1+2$ 分割と双対ペア正規化}
+三次元ベクトル空間 $V$ の中から一本のベクトル $u\in V$ を選ぶ．これは「主軸（輝度方向）」として扱う方向である．
+次に，信号から主軸方向のスカラーを読み取るための線形汎関数 $\ell:V\to\mathbb{R}$ を導入する．
+実装レベルでは「三成分に対する重み付き和」に相当する．例えば RGB 空間であれば，係数 $(\ell_R,\ell_G,\ell_B)$ により
+\begin{equation}
+  \ell(x)=\ell_R x_R+\ell_G x_G+\ell_B x_B
+  \tag{1}\label{eq:l_readout}
+\end{equation}
+のように与えられる．
+
+本論文では，$(u,\ell)$ のスケール自由度を固定するために，次の\emph{双対ペア正規化}を採用する：
+\begin{equation}
+  \ell(u)=1 .
+  \tag{2}\label{eq:dualpair_norm}
+\end{equation}
+一般の $(u,\ell)$ に対して $\ell(u)\neq 0$ であれば，例えば $u\leftarrow u/\ell(u)$ により \eqref{eq:dualpair_norm} を満たすよう正規化できる．
+以降，特に断らない限り $(u,\ell)$ は双対ペア正規化 \eqref{eq:dualpair_norm} を満たしているものとして扱う（正規化後も記号を変えない）．
+
+このとき任意の信号 $x\in V$ は
+\begin{equation}
+  x=\ell(x)\,u+\bigl(x-\ell(x)u\bigr)
+  \tag{3}\label{eq:decomp_basic}
+\end{equation}
+と分解できる．右辺第 1 項は主軸方向の成分，第 2 項は残りの成分である．ここで
+\begin{equation}
+  Y(x):=\ell(x),
+  \tag{4}\label{eq:def_Y}
+\end{equation}
+\begin{equation}
+  r(x):=x-Y(x)u
+  \tag{5}\label{eq:def_r}
+\end{equation}
+とおき，それぞれ $x$ の主軸スカラー（以下，輝度スカラー）および残差成分と呼ぶ．
+以降，$r(x)$ を「残差（残差成分）」と呼び，$\ker \ell$ を「残差部分空間」と呼ぶ．
+とくに $\dim V = 3$ の場合，$\ker \ell$ は 2 次元平面であるため，直感的説明では「残差平面」とも呼ぶ．
+
+
+残差成分について，線形性と正規化 \eqref{eq:dualpair_norm} から
+\begin{equation}
+  \ell\!\bigl(r(x)\bigr)
+  =\ell\!\bigl(x-\ell(x)u\bigr)
+  =\ell(x)-\ell(x)\ell(u)
+  =0
+  \tag{6}\label{eq:r_in_ker}
+\end{equation}
+が成り立つので，$r(x)$ は $\ell$ の核
+\[
+  \ker\ell:=\{v\in V\mid \ell(v)=0\}
+\]
+に属する．したがって，任意の $x$ は
+\begin{itemize}
+\item 直線 $\mathbb{R}u$ 上の点 $Y(x)u$ と
+\item 平面 $\ker\ell$ 上の点 $r(x)$
+\end{itemize}
+の和として表される．さらに，$\mathbb{R}u\cap\ker\ell=\{0\}$（もし $v=au$ かつ $\ell(v)=0$ なら $0=\ell(v)=a\ell(u)=a$）より表示は一意であり，
+\begin{equation}
+  V=\mathbb{R}u\oplus \ker\ell
+  \tag{7}\label{eq:directsum}
+\end{equation}
+という 1 次元の主軸と 2 次元の残差平面の直和分解が得られる（より一般の整理は\ref{app:dualpair}にまとめる）．
+
+以降，本論文でいう「$1+2$ 構造」とは，組 $(u,\ell)$ と双対ペア正規化 \eqref{eq:dualpair_norm} によって誘導される直和分解 \eqref{eq:directsum} を前提とした構造を指す．
+
+\subsection{CONJ 変換の定義}
+次に，この $1+2$ 構造の上で「輝度だけに任意の非線形をかけ，残差成分はそのまま残す」変換を定義する．
+これを CONJ Transform（以下，CONJ 変換）と呼ぶ．
+
+1 変数の実関数 $\varphi:\mathbb{R}\to\mathbb{R}$ を用意する．これは輝度スカラー $Y$ を別のスカラー $\varphi(Y)$ に写すトーンカーブであり，
+ガンマ関数，トーンマッピング，ロールオフなどを含む任意の非線形を想定する \citep{reinhard2005hdr,itur_bt2100}．
+
+組 $(u,\ell)$（双対ペア正規化 \eqref{eq:dualpair_norm} を満たすもの）を固定したとき，入力信号 $x\in V$ に対する CONJ 変換 $T_\varphi$ は，次の手順で定義される：
+\begin{enumerate}
+\item 輝度読み取り $\ell$ により，入力の輝度
+\begin{equation}
+  Y=\ell(x)
+  \tag{8}\label{eq:Y_readout}
+\end{equation}
+を求める．
+\item 主軸方向の寄与を引き去って，残差成分
+\begin{equation}
+  r(x)=x-Yu
+  \tag{9}\label{eq:r_extract}
+\end{equation}
+を計算し，これを保持する．
+\item 輝度 $Y$ に対してトーンカーブ $\varphi$ を適用し，新しい輝度 $\varphi(Y)$ を得る．
+\item 主軸方向に $\varphi(Y)$ を載せ直し，元の残差成分を足し戻して
+\begin{equation}
+  x'=\varphi(Y)\,u+r(x)
+  \tag{10}\label{eq:recompose}
+\end{equation}
+を出力とする．
+\end{enumerate}
+この手順をまとめると，CONJ 変換は
+\begin{equation}
+  T_\varphi(x):=\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr)
+  \tag{11}\label{eq:conj_def}
+\end{equation}
+と書ける．すなわち，入力を一度「輝度スカラー $Y(x)$ と残差ベクトル $r(x)$」に分解し，輝度スカラーだけを任意の 1 次元非線形 $\varphi$ で変形し，残差ベクトルはそのままの位置に保ったまま再合成する，という構造である．
+
+実装上は，$(u,\ell)$ に整合する「（輝度，残差）」形式への $3\times 3$ 線形変換を一つ用意し，輝度チャネルだけを 1 次元 LUT に通し，同じ $(u,\ell)$ から得られる逆変換で元の空間 $V$ に戻す，という流れで実現できる．
+行列表現や変換行列の具体的構成は\ref{app:dualpair}に詳述し，本節では CONJ 変換の構造的な定義にとどめる．
+
+\subsection{残差成分の不変性（命題と証明）}
+CONJ 変換の核心は，「トーンカーブ $\varphi$ を 1 次元の関数として適用する限り，
+その具体形に依らず，\emph{理想的な実数演算のもとで} 残差成分が不変となる」点にある．
+ただし実装では，有限精度演算やクリッピング等により，この不変性が事実上成立する範囲は制限され得る．
+
+ここでは，本文中でこの不変性を簡潔に示す．
+
+双対ペア正規化 \eqref{eq:dualpair_norm} のもとで，線形写像 $Q,P:V\to V$ を
+\[
+  Qx:=u\,\ell(x),\qquad P:=I-Q
+\]
+で定める（$I$ は恒等写像）．このとき $Px=x-\ell(x)u=r(x)$ であり，$P$ は残差平面 $\ker\ell$ への射影として働く．
+実際，正規化 \eqref{eq:dualpair_norm} から $Pu=u-\ell(u)u=0$ が従い，また $P^2=P$ が成り立つ（詳細は\ref{app:dualpair}）．
+
+\begin{proposition}[残差不変性]
+双対ペア正規化 \eqref{eq:dualpair_norm} を満たす組 $(u,\ell)$ と任意の関数 $\varphi:\mathbb{R}\to\mathbb{R}$ に対して，
+任意の $x\in V$ で
+\[
+  P\bigl(T_\varphi(x)\bigr)=P(x)
+\]
+が成り立つ．すなわち CONJ 変換は残差成分 $r(x)=Px$ を不変に保つ．
+\end{proposition}
+
+\begin{proof}
+定義 \eqref{eq:conj_def} より $T_\varphi(x)=\varphi(\ell(x))u+Px$ と書ける．よって
+\[
+  P\bigl(T_\varphi(x)\bigr)=P\bigl(\varphi(\ell(x))u+Px\bigr)
+  =\varphi(\ell(x))\,Pu+P^2x
+  =0+Px
+  =P(x),
+\]
+ここで $Pu=0$ と $P^2=P$ を用いた．
+\end{proof}
+
+重要なのは，この性質が $\varphi$ の具体的形に依存せず，
+「$(u,\ell)$ による $1+2$ 分割」と「双対ペア正規化 \eqref{eq:dualpair_norm}」のみから導かれる点である．
+したがって，一度主軸と残差平面を定めておけば，その上でどのような 1 次元非線形を選んでも，理想的な実数演算では残差成分は不変に保たれる．
+
+実際の実装では，有限精度演算やクリッピング，ダイナミックレンジの制約により，完全な不変性が保証される範囲は有限となる．
+本論文では，この範囲を「残差不変性が事実上成立する領域」として捉え，数値実験においてその性質を評価する．
+
+% =========================================================
+\section{CONJ の観点から見た既存 $1+2$ 色空間の整理}
+
+\subsection{比較軸（分割と非線形の順序）}
+本節では，代表的な $1+2$ 構造色空間を，CONJ の観点から最小限の軸で整理する．
+本稿の関心は，色空間の歴史的経緯や細部の実装差ではなく，
+「主軸と残差平面の関係が，非線形処理の有無・順序によってどのように影響を受けるか」にある．
+
+代表例として，YCbCr（BT.601/BT.709）\citep{itur_bt601,itur_bt709}，
+CIELAB \citep{cie1976lab}，
+IPT \citep{ebner1998ipt}，
+ICtCp \citep{dolby2016ictcp,itur_bt2100}，
+Oklab \citep{ottosson2020oklab}，
+LogLuv \citep{larson1998logluv}
+を取り上げる．
+
+そこで，次の 3 つの記号で各空間の構造を要約する：
+\begin{itemize}
+\item $S$：$1+2$ 分割（主軸スカラーと残差成分への分解）．
+      本稿の記号では $(u,\ell)$ を選び，
+      $Y=\ell(x)$ と $r(x)=x-Yu$ を得る操作に対応する．
+\item $N1$：1 次元非線形（主軸スカラー $Y$ のみに作用）．
+      すなわち $Y\mapsto\varphi(Y)$ であり，他の成分には直接作用しない．
+\item $N3$：3 次元非線形（作業空間の 3 成分全体に作用）．
+      典型例はガンマや立方根型の圧縮関数などである．
+\end{itemize}
+
+また，「残差平面」の列は，主軸の操作が残差平面上の位置を変えないという意味での
+残差不変性（第2章で述べた性質）が，
+\begin{center}
+$\checkmark$：厳密に成立，\quad
+$\sim$：設計意図としては分離だが厳密には保証されない／近似的，\quad
+$\times$：一般には保証されない
+\end{center}
+のどれに該当するかを表す．
+表\ref{tab:overview_simple}に概観をまとめる．
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{CONJ 観点からの $1+2$ 空間の要点整理（分割と非線形の順序／残差平面）．
+  $S$：$1+2$ 分割，$N1$：主軸スカラーへの 1 次元非線形，$N3$：3 成分への非線形．}
+  \label{tab:overview_simple}
+  \begin{tabular}{llll}
+    \toprule
+    空間 & 作業空間 $V$ & 手順 & 残差平面 \\
+    \midrule
+    YCbCr (BT.601/709) & $R'G'B'$ & $N3 \rightarrow S$ & $\times$ \\
+    CIELAB & XYZ & $N3 \rightarrow S$ & $\sim$ \\
+    IPT / ICtCp & LMS 系 & $N3 \rightarrow S$ & $\sim$ \\
+    Oklab & LMS 近似系 & $N3 \rightarrow S$ & $\sim$ \\
+    LogLuv & XYZ & $S \rightarrow N1$ & $\checkmark$（再解釈） \\
+    \midrule
+    CONJ & 任意の $V$ & $S \rightarrow N1$ & $\checkmark$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{$S \rightarrow N1$ 型：分割後に主軸へ 1 次元非線形}
+第2章で示したとおり，作業空間 $V$ 上で主軸 $u$ と読み取り $\ell$ を選び，
+双対ペア正規化 $\ell(u)=1$ を採用して $V=\mathbb{R}u\oplus\ker\ell$ を確定したうえで，
+主軸スカラー $Y=\ell(x)$ のみに $N1$ を適用すれば，
+理想的な実数演算のもとで残差平面は不変となる（残差不変性）．
+この意味で，$S\rightarrow N1$ は「残差平面を固定したまま主軸だけを非線形に変形する」ための構造的条件になっている．
+
+\paragraph{CONJ}
+CONJ はこの $S\rightarrow N1$ を，任意の作業空間 $V$ 上で明示的に構成する．
+すなわち，先に分割 $S$ を確定し，その後に主軸スカラーへ $N1$ を適用する．
+この順序が，クロストークを「設計上排除できる」側に置く．
+
+\paragraph{LogLuv（再解釈としての位置づけ）}
+LogLuv \cite{larson1998logluv} は線形 XYZ を作業空間とし，
+輝度読み取り $Y=\ell_Y(x)$ に対して対数圧縮（$\log Y$ あるいは近似 $\log$）を適用し，
+色度は $Y$ で正規化した 2 次元パラメータとして表現する枠組みである．
+したがって手順の観点からは，分割 $S$ の後に主軸へ 1 次元非線形 $N1$ を適用する
+$S\to N1$ 型として整理できる．
+また，ここで「同型（再解釈）」とは，
+残差平面上の 2 次元座標の取り方（基底変換）を許したときに，
+双対ペア正規化 $\ell(u)=1$ のもとでの CONJ 標準形
+$T_\varphi(x)=\varphi(\ell(x))u+(I-u\ell)x$ に書き直せることを指す．
+ただし，LogLuv が CONJ を意図して設計されたと主張するものではない．
+
+\subsection{$N3 \rightarrow S$ 型：非線形後に $1+2$ を構成する空間}
+CIELAB \citep{cie1976lab}，IPT/ICtCp \citep{ebner1998ipt,dolby2016ictcp,itur_bt2100}，Oklab \citep{ottosson2020oklab} は典型的に，
+作業空間の 3 成分全体に非線形 $N3$ を適用した後に，
+結果を $1+2$ 形式へまとめる（$N3\rightarrow S$）．
+これらは知覚特性（明るさ・色差の扱いやすさ）を主目的として設計されており，
+実用上は「主軸らしさ」「色差らしさ」が得られるが，
+第2章で述べた意味での残差平面不変性は，構造上は一般には保証されない．
+
+したがって，これらの空間で主軸（例：$L^*$ や $L$）だけを操作して逆変換したとき，
+残差平面上の位置がどの程度保たれるかは，
+非線形の形や行列の設計，ダイナミックレンジ，実装上の丸め等に依存し，
+「厳密に不変」とは言い切れない（表\ref{tab:overview_simple}の $\sim$）．
+本稿の立場では，この差は「設計目的の違い」として整理される．
+
+\subsection{$R'G'B'$ を作業空間とする分割：YCbCr の位置づけ}
+YCbCr は $R'G'B'$（ガンマ後 RGB）を作業空間として，
+線形結合により輝度相当の量と色差を構成する \citep{itur_bt601,itur_bt709}．
+見かけ上は $1+2$ 形式であるが，分割の前にガンマが三成分全体へ作用しているため，
+主軸操作と残差操作の独立性（残差平面不変性）は一般には保証されない．
+本稿では，この構造を $N3\rightarrow S$ の代表例として整理する．
+
+\subsection{まとめ：本稿が着目する設計自由度}
+以上より，$1+2$ 構造に見える表現であっても，
+非線形の位置が $S$ の前にあるか後にあるかで，
+残差平面の扱いは本質的に変わる．
+本稿が主張するのは，「トーンカーブの形」そのものよりも先に，
+作業空間 $V$ 上で主軸 $u$ と読み取り $\ell$ をどう選び，
+双対ペア正規化 $\ell(u)=1$ を採用して $S$ を確定するかが決定的である，という点である．
+
+次章では，この双対ペア正規化を具体例（scene-linear sRGB 等）で示し，
+$(u,\ell)$ の固定がどのように実装に落ちるかを述べる．
+
+% =========================================================
+\section{双対ペア正規化と具体化}
+
+\subsection{双対ペア正規化（一般形）}
+三次元実ベクトル空間 $V$ と，その代数的双対 $V^*:=\mathrm{Hom}(V,\mathbb{R})$ を考える．
+主軸ベクトル $u\in V$ と線形汎関数 $\ell\in V^*$ の組 $(u,\ell)$ は，
+第2章で述べた $1+2$ 分割（主軸スカラーと残差平面）の指定に対応する．
+
+本稿では，スケール自由度を固定するために，
+\emph{双対ペア正規化}
+\begin{equation}
+  \ell(u)=1
+  \label{eq:dualpair_norm_ch4}
+\end{equation}
+を採用する．
+一般の $(u,\ell)$ に対して $\ell(u)\neq 0$ であれば，例えば
+\[
+  u \leftarrow \frac{u}{\ell(u)}
+  \qquad\text{または}\qquad
+  \ell \leftarrow \frac{\ell}{\ell(u)}
+\]
+のいずれかの再スケーリングにより \eqref{eq:dualpair_norm_ch4} を満たせる．
+（$\ell$ をスケールしても $\ker\ell$ は不変であるため，残差平面の幾何は変わらない．）
+以降，本章でも断らない限り \eqref{eq:dualpair_norm_ch4} を仮定し，正規化後も記号を変えず $(u,\ell)$ と書く．
+
+\subsection{正規化後の直和分解と射影（実装最小形）}
+双対ペア正規化 \eqref{eq:dualpair_norm_ch4} のもとで，
+任意の $x\in V$ に対し
+\begin{equation}
+  Y(x):=\ell(x),\qquad r(x):=x-\ell(x)u
+  \label{eq:Y_r_ch4}
+\end{equation}
+と定めると，
+\[
+  \ell(r(x))=\ell(x)-\ell(x)\ell(u)=0
+\]
+より $r(x)\in\ker\ell$ が成り立つ．したがって
+\begin{equation}
+  V=\mathbb{R}u\oplus\ker\ell
+  \label{eq:directsum_ch4}
+\end{equation}
+が得られ，表示 $x=Y(x)u+r(x)$ は一意である．
+
+この分解に対応するランク1写像と射影を
+\begin{equation}
+  Qx:=u\,\ell(x),\qquad P:=I-Q
+  \label{eq:PQ_ch4}
+\end{equation}
+で定める（$I$ は恒等写像）．
+正規化 \eqref{eq:dualpair_norm_ch4} から
+\[
+  Pu=u-\ell(u)u=0,\qquad P^2=P
+\]
+が従い，$P$ は $\ker\ell$ への射影として働く．
+
+このとき，第2章で定義した CONJ 変換は
+\begin{equation}
+  T_\varphi(x)=\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr)
+  \label{eq:conj_def_ch4}
+\end{equation}
+であるが，実装上は次の等価な「最小形」が便利である：
+\begin{equation}
+  T_\varphi(x)=x+\bigl(\varphi(\ell(x))-\ell(x)\bigr)\,u .
+  \label{eq:conj_minimal_ch4}
+\end{equation}
+すなわち，
+(1) $Y=\ell(x)$ を計算し，
+(2) 1D 変換 $Y\mapsto\varphi(Y)$ を適用し，
+(3) 差分 $\Delta=\varphi(Y)-Y$ を主軸方向に加算する，
+という形で実装できる．
+残差平面の不変性は，第2章の命題（理想的な実数演算のもと）として既に示した通りである．
+ただし有限精度演算・クリッピング等により，この性質が事実上成立する範囲は制限され得る．
+
+\subsection{具体例：scene-linear sRGB における正規化と座標化の一例}
+具体例として，作業空間を scene-linear sRGB の三次元空間
+$V_{\mathrm{sRGB}}=\mathbb{R}^3_{\mathrm{RGB}}$ とする \citep{iec61966-2-1}．
+主軸は無彩色方向として
+\[
+  u_s=(1,1,1)^\top
+\]
+を採用する．輝度読み取りは係数 $w=(w_R,w_G,w_B)^\top$ を用いて
+\[
+  \ell_s(x)=w^\top x=w_R x_R+w_G x_G+w_B x_B
+\]
+と定める．
+典型的な係数として
+\[
+  w=(0.2126,\ 0.7152,\ 0.0722)^\top
+\]
+を用いると $w_R+w_G+w_B=1$ なので $\ell_s(u_s)=1$ が成り立ち，
+$\ell(u)=1$ の双対ペア正規化が既に満たされる（Rec.709 系係数の代表例）\citep{itur_bt709}．
+（係数の和が 1 でない場合も，前節の手順で必ず正規化できる．）
+
+残差平面 $\ker\ell_s$ の座標化は一意ではない（$\ker\ell_s$ 上の基底の取り方に自由度がある）．
+例えば，$\ell_s(v)=0$ を満たす 2 本の独立ベクトルとして
+\[
+  v_1=\left(1,\ -\frac{w_R}{w_G},\ 0\right)^\top,\qquad
+  v_2=\left(1,\ 0,\ -\frac{w_R}{w_B}\right)^\top
+\]
+をとれば，$w^\top v_1=w^\top v_2=0$ が直ちに確認できる．
+このとき
+\[
+  B:=[\,u_s\ v_1\ v_2\,]\in\mathbb{R}^{3\times 3}
+\]
+は正則であり，$y=(Y,C_1,C_2)^\top$ により
+\[
+  x = B\,y = Y\,u_s + C_1 v_1 + C_2 v_2
+\]
+と表せる．逆に $A:=B^{-1}$ を用いれば
+\[
+  y=A x
+\]
+が成り立つ．ここで，$v_1,v_2\in\ker\ell_s$ と $\ell_s(u_s)=1$ から
+$A$ の第1行は必ず $\ell_s$（すなわち $w^\top$）と一致し，
+\[
+  Y=\ell_s(x)
+\]
+が保証される．
+
+従って，CONJ の実装は
+\[
+  (Y,C_1,C_2)^\top = A x,\quad
+  Y'=\varphi(Y),\quad
+  x' = B (Y',C_1,C_2)^\top
+\]
+としてもよいし，前節の最小形 \eqref{eq:conj_minimal_ch4} により
+\[
+  x' = x + (\varphi(\ell_s(x))-\ell_s(x))\,u_s
+\]
+としてもよい．
+残差平面の座標化（$v_1,v_2$ の選び方）は数値安定性やスケーリングに影響し得るが，
+残差平面不変性そのものは $(u,\ell)$ と正規化によって決まり，座標化には依存しない．
+
+% =========================================================
+\subsection{ 3 × 3 行列表現による実装例（座標化）}
+本節では，双対ペア正規化 $\ell(u)=1$ を採用したうえで，
+CONJ 変換を $3\times 3$ 行列（前変換・後変換）として実装する具体形を示す．
+これは第2章の定義と等価であり，残差平面の座標を明示したい場合に有用である．
+
+\paragraph{（Step 1）残差平面の基底を選ぶ}
+$\ker\ell$ を張る 2 本の独立ベクトル $v_1,v_2\in V$ を選ぶ（$\ell(v_1)=\ell(v_2)=0$）．
+この選び方には自由度があるが，$v_1,v_2$ が独立で，かつ数値的に極端なスケールを避ければ十分である．
+
+\paragraph{（Step 2）基底行列と前後変換}
+列に $u,v_1,v_2$ を並べた行列
+\[
+  B := [\,u\ v_1\ v_2\,]\in\mathbb{R}^{3\times 3}
+\]
+を作る（作業空間 $V$ を座標化した表現として）．$u,v_1,v_2$ が一次独立なら $B$ は正則であり，
+\[
+  A := B^{-1}
+\]
+を定める．このとき，任意の $x\in V$ は
+\[
+  y = (Y,C_1,C_2)^\top := A x,\qquad
+  x = B y = Y u + C_1 v_1 + C_2 v_2
+\]
+と表される．さらに $\ell(u)=1$ および $\ell(v_1)=\ell(v_2)=0$ から
+\[
+  \ell(x)=\ell(B y)=Y
+\]
+が従うので，$Y$ は「$\ell$ による読み取り」と一致する．したがって $A$ の第1行は $\ell$（の座標表現）と一致する．
+
+\paragraph{（Step 3）CONJ の行列表現}
+トーンカーブ $\varphi:\mathbb{R}\to\mathbb{R}$ に対し，
+\[
+  y' := (\varphi(Y),\, C_1,\, C_2)^\top
+\]
+と定め，出力を
+\[
+  x' := B y'
+\]
+とする．すなわち
+\[
+  x' = B \begin{pmatrix}\varphi(Y)\\C_1\\C_2\end{pmatrix},
+  \qquad
+  (Y,C_1,C_2)^\top = A x .
+\]
+これは第2章の定義 \eqref{eq:conj_def} と等価であり，行列表現では「第1成分だけ 1D 非線形に通し，第2・第3成分は保持する」操作として実装できる．
+
+\paragraph{実装上の注意}
+$A=B^{-1}$ を明示的に構成する方式は，
+残差平面座標 $(C_1,C_2)$ を外部に公開したい場合や，
+既存の線形変換パイプラインに組み込みたい場合に有用である．
+一方，数値コストだけを重視する場合は，
+\[
+  x' = x + \bigl(\varphi(\ell(x))-\ell(x)\bigr)\,u
+\]
+という最小形（前節 \eqref{eq:conj_minimal_ch4}）がより直接的である．
+いずれの実装でも，有限精度やクリッピングにより不変性が事実上成立する範囲は制限され得る．
+
+% ============================================================
+\section{数値実験：従来パイプラインとの比較}
+\label{sec:experiments}
+
+本章では，\textbf{主軸と残差を定める双対ペア $(u,\ell)$ の選択と，
+$\ell(u)=1$ という正規化条件}が，
+一軸非線形演算の前後関係
+（「非線形$\to$分解」か「分解$\to$非線形」か）に対して，
+クロマ不変性を決定的に左右することを，
+数値実験により検証する。
+
+\subsection{設定：基準空間と双対ペアの正規化}
+\label{subsec:setup}
+
+評価は scene-linear 層で行う。
+まず，線形 sRGB サンプル $x\in[0,1]^3$ を生成し，
+線形変換により $XYZ$ サンプルを得る：
+\[
+x_{\mathrm{XYZ}} = M_{\mathrm{sRGB}\to\mathrm{XYZ}}\,x_{\mathrm{sRGB}} .
+\]
+実装上は，数値誤差による微小な負値は $0$ にクリップする。
+ここでの $sRGB\leftrightarrow XYZ$ 変換は，
+D65 白色点を前提とする標準的な定義に従う
+\citep{iec61966-2-1,cie15_2018}。
+
+\paragraph{XYZ 側の正規化}
+$V_{\mathrm{XYZ}}=\mathbb{R}^3$ 上で，
+主軸を物理輝度 $Y$ に一致させ，
+\[
+u_Y := (0,1,0),\qquad \ell_Y(x):=x_Y
+\]
+と定める。このとき $\ell_Y(u_Y)=1$ が成り立つ。
+
+\paragraph{sRGB 側の正規化}
+$sRGB$ 空間 $V_{\mathrm{sRGB}}=\mathbb{R}^3$ 上では，
+$\ell_s$ を
+「線形 sRGB を $XYZ$ に写したときの $Y$ 成分」
+として
+\[
+\ell_s(x) := \bigl(M_{\mathrm{sRGB}\to\mathrm{XYZ}}\,x\bigr)_Y
+\]
+と定める。
+主軸 $u_s$ は，$XYZ$ 側の主軸 $u_Y$ を
+$sRGB$ 側へ引き戻したものとして
+\[
+u_s := M_{\mathrm{XYZ}\to\mathrm{sRGB}}\,u_Y
+\]
+とする。この定義により
+\[
+\ell_s(u_s)=1
+\]
+が自動的に満たされる。
+
+\subsection{評価指標}
+\label{subsec:metrics}
+
+射影（残差抽出）を
+\[
+P(x) := x-\ell(x)u \in \ker\ell
+\]
+と定義する。
+
+\paragraph{クロストーク指標}
+サンプル集合 $D$ と自己写像 $F:V\to V$ に対し，
+\begin{equation}
+C(F;D)
+:=\frac{1}{|D|}\sum_{x\in D}\|P(F(x))-P(x)\|_2^2
+\label{eq:crosstalk}
+\end{equation}
+で定義する。
+$C(F;D)=0$ は，$D$ 上で残差が厳密に不変であることを意味する。
+
+\paragraph{クロマ共分散の変化}
+残差 $r(x)=P(x)$ の共分散を
+\[
+\Sigma_{\mathrm{chroma}}(D)
+:=\frac{1}{|D|}\sum_{x\in D}(r(x)-\bar r)(r(x)-\bar r)^\top,
+\quad
+\bar r:=\frac{1}{|D|}\sum_{x\in D}r(x)
+\]
+とし，
+\begin{equation}
+\Delta\Sigma(F)
+:=\bigl\|
+\Sigma_{\mathrm{chroma}}(F(D))-\Sigma_{\mathrm{chroma}}(D)
+\bigr\|_F
+\label{eq:deltasigma}
+\end{equation}
+で測る。
+
+\subsection{実験1：sRGB 側（従来型 vs CONJ）}
+\label{subsec:exp_srgb}
+
+基準空間を $V_{\mathrm{sRGB}}$ とし，
+上で定めた $(u_s,\ell_s)$ を用いる。
+サンプル集合は
+\[
+D_{\mathrm{sRGB}}
+:=\{x_i\}_{i=1}^N,\quad
+x_i\sim\mathrm{Unif}([0,1]^3)
+\]
+である。
+
+\paragraph{従来パイプライン（簡易モデル）}
+非線形を先に適用し，
+その後 $1+2$ 分解を行う代表例として，
+次の合成写像を用いる：
+\[
+F^{(s)}_{\mathrm{legacy}}
+:=\gamma^{-1}\circ T^{-1}_{Y'CbCr}
+\circ T_{Y'}\circ T_{Y'CbCr}\circ\gamma .
+\]
+ここで
+\[
+\gamma(x)=x^{1/\gamma},\quad
+\gamma^{-1}(x)=x^\gamma,
+\]
+$T_{Y'CbCr}$ は BT.709 係数に基づく簡易的な
+$R'G'B'\leftrightarrow Y'CbCr$ 変換，
+$T_{Y'}$ は
+\[
+Y'\mapsto \mathrm{clip}(Y',0,1)^\alpha
+\]
+である。
+
+\paragraph{CONJ パイプライン}
+CONJ では scene-linear 層で分解を行い，
+主軸成分のみに非線形を適用する：
+\[
+F^{(s)}_{\mathrm{conj}}(x)
+=\phi(\ell_s(x))u_s+\bigl(x-\ell_s(x)u_s\bigr),
+\quad
+\phi(s)=\max(s,0)^\alpha .
+\]
+
+\subsection{実験2：XYZ/Lab 側（Lab 処理 vs XYZ 上の CONJ）}
+\label{subsec:exp_lab}
+
+同一サンプルを $XYZ$ に写し，
+\[
+D_{\mathrm{XYZ}}
+:=\{M_{\mathrm{sRGB}\to\mathrm{XYZ}}x_i\}_{i=1}^N
+\]
+を構成する。
+評価は scene-linear $XYZ$ 空間上で行い，
+双対ペアとして $(u_Y,\ell_Y)$ を用いる。
+
+\paragraph{CIELAB ベースの従来手続き}
+次の写像を比較対象とする：
+\[
+F_{\mathrm{Lab\text{-}legacy}}
+:=T^{-1}_{\mathrm{Lab}\to\mathrm{XYZ}}
+\circ T_{L^*}\circ
+T_{\mathrm{XYZ}\to\mathrm{Lab}} .
+\]
+ここで $T_{L^*}$ は
+\[
+L^*\mapsto
+100\cdot\mathrm{clip}\!\left(\frac{L^*}{100},0,1\right)^\alpha
+\]
+であり，$a^*,b^*$ は保持する。
+なお，本実験では Lab 空間で $L^*$ 操作を行った後，
+scene-linear $XYZ$ に引き戻した上で残差評価を行っている。
+
+\paragraph{XYZ 上の CONJ}
+\[
+F_{\mathrm{XYZ\text{-}conj}}(x)
+=\phi(\ell_Y(x))u_Y+\bigl(x-\ell_Y(x)u_Y\bigr),
+\quad
+\phi(s)=\max(s,0)^\alpha .
+\]
+
+\subsection{結果}
+\label{subsec:results}
+
+\begin{table}[t]
+  \centering
+  \caption{一様乱数サンプル
+  （$N=100\,000$, $\alpha=0.8$, $\gamma=2.2$）
+  に対する評価結果．}
+  \label{tab:exp_results}
+  \begin{tabular}{lcc}
+    \toprule
+    写像 $F$ & $C(F;D)$ & $\Delta\Sigma(F)$ \\
+    \midrule
+    sRGB：Legacy & $4.62\times10^{-2}$ & $3.27\times10^{-2}$ \\
+    sRGB：CONJ   & $4.38\times10^{-32}$ & $2.28\times10^{-17}$ \\
+    XYZ/Lab：Legacy & $1.25\times10^{-2}$ & $1.42\times10^{-2}$ \\
+    XYZ：CONJ   & $0$ & $0$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+sRGB 側および XYZ/Lab 側のいずれにおいても，
+従来型（非線形$\to$分解）では
+scene-linear 層に引き戻した残差に
+$10^{-2}$ オーダーの変動が残る。
+一方，双対正規化 $\ell(u)=1$ のもとで
+分解を先に行う CONJ では，
+残差変動は倍精度演算の機械精度レベルに抑えられる。
+
+特に XYZ 側の CONJ で
+$C(F;D)=0$ および $\Delta\Sigma(F)=0$ が得られるのは，
+$\ell_Y(u_Y)=1$ による直和分解が
+代数的に厳密であることを数値的に反映した結果である。
+
+% ============================================================
+
+\section{実写画像による検証}
+\label{sec:real_image}
+
+\subsection{入力と前処理（linear light への統一）}
+入力は sRGB 符号化された 8-bit RGB 画像（JPEG）を $[0,1]$ に正規化したものとする．
+本稿の $1+2$ 分割（主軸＋残差）は \textbf{linear light} 上で定義・評価するため，
+入力 $x_{\mathrm{srgb}}$ に対し sRGB 逆 EOTF $E^{-1}$ を用いて
+\begin{equation}
+  x_{\mathrm{lin}} := E^{-1}(x_{\mathrm{srgb}})
+\end{equation}
+を得る．
+
+\subsection{双対ペア（主軸・残差の定義）}
+主軸は Rec.\,709 / sRGB の線形輝度係数
+\[
+  c := (0.2126,\;0.7152,\;0.0722)
+\]
+により $\ell(x)=c^\top x$ と定める．
+無彩色軸は
+\[
+  u := (1,1,1)
+\]
+を用い，$\ell(u)=1$ を満たすように正規化済みとする．
+このとき各画素 $x$ は
+\begin{equation}
+  x = \ell(x)\,u + r(x),\qquad r(x):=x-\ell(x)\,u\in \ker\ell
+\end{equation}
+と一意に分解される．
+
+\subsection{一軸トーン関数}
+一軸トーン関数は
+\begin{equation}
+  \varphi_\alpha(s) := \mathrm{clip}(s,0,1)^\alpha
+\end{equation}
+とし，既定値は $\alpha=0.8$ とする．
+
+\subsection{比較する 2 つのパイプライン}
+実写画像について，次の 2 系統を比較する（評価はすべて linear light に揃える）．
+
+\paragraph{(A) CONJ（linear で分解 $\rightarrow$ 主軸のみ非線形 $\rightarrow$ 再合成）}
+\begin{align}
+  x_{\mathrm{lin}} &:= E^{-1}(x_{\mathrm{srgb}}),\\
+  Y_{\mathrm{lin}} &:= \ell(x_{\mathrm{lin}}),\qquad r_{\mathrm{lin}}:=x_{\mathrm{lin}}-Y_{\mathrm{lin}}u,\\
+  x_{\mathrm{conj,lin}} &:= \varphi_\alpha(Y_{\mathrm{lin}})\,u + r_{\mathrm{lin}}.
+\end{align}
+
+\paragraph{(B) Legacy（非線形（sRGB）空間で分解 $\rightarrow$ 主軸非線形 $\rightarrow$ 再合成）}
+Legacy は「分解を非線形空間で行う」順序不整合を代表させる簡約モデルとして，
+\begin{align}
+  Y_{\mathrm{gam}} &:= \ell(x_{\mathrm{srgb}}),\qquad r_{\mathrm{gam}}:=x_{\mathrm{srgb}}-Y_{\mathrm{gam}}u,\\
+  x_{\mathrm{legacy,srgb}} &:= \mathrm{clip}\bigl(\varphi_\alpha(Y_{\mathrm{gam}})\,u + r_{\mathrm{gam}},\,0,1\bigr),\\
+  x_{\mathrm{legacy,lin}} &:= E^{-1}(x_{\mathrm{legacy,srgb}})
+\end{align}
+と定める．
+
+\subsection{評価指標（linear light）}
+linear light 上の残差を
+\[
+  r_{\mathrm{orig}}:=r(x_{\mathrm{lin}}),\quad
+  r_{\mathrm{conj}}:=r(x_{\mathrm{conj,lin}}),\quad
+  r_{\mathrm{legacy}}:=r(x_{\mathrm{legacy,lin}})
+\]
+とする（$r(x)=x-\ell(x)u$）．
+
+\paragraph{クロストーク量}
+画素集合 $D_{\mathrm{img}}$ に対して
+\begin{equation}
+  C_{\mathrm{img}} := \frac{1}{|D_{\mathrm{img}}|}\sum_{p\in D_{\mathrm{img}}}
+  \left\| r_{\mathrm{out}}(p)-r_{\mathrm{orig}}(p)\right\|_2^2
+\end{equation}
+を用いる（$\mathrm{out}\in\{\mathrm{conj},\mathrm{legacy}\}$）．
+
+\paragraph{クロマ共分散変化}
+残差の中心化共分散
+\[
+  \Sigma(r):=\mathbb{E}\bigl[(r-\mathbb{E}[r])(r-\mathbb{E}[r])^\top\bigr]
+\]
+を用い，
+\begin{equation}
+  \Delta\Sigma_{\mathrm{img}} := \left\|\Sigma(r_{\mathrm{out}})-\Sigma(r_{\mathrm{orig}})\right\|_F
+\end{equation}
+（Frobenius ノルム）を評価する．
+
+\subsection{結果}
+図像 \texttt{YKT\_3336.jpg}，$\alpha=0.8$ に対する結果を表\ref{tab:real_results} に示す．
+CONJ は残差不変性により，$C_{\mathrm{img}}$ および $\Delta\Sigma_{\mathrm{img}}$ が
+倍精度計算の丸め誤差レベルまで抑制される一方，
+Legacy では分解を非線形空間で行う順序不整合に起因する残差変動が観測される．
+
+\begin{table}[t]
+\centering
+\caption{実写画像（YKT\_3336, $\alpha=0.8$）におけるクロストーク評価（linear light で評価）}
+\label{tab:real_results}
+\begin{tabular}{lcc}
+\hline
+ & Legacy & CONJ \\
+\hline
+$C_{\mathrm{img}}$ & $6.9615\times 10^{-4}$ & $8.2927\times 10^{-33}$ \\
+$\Delta\Sigma_{\mathrm{img}}$ (Fro) & $3.5171\times 10^{-3}$ & $9.4495\times 10^{-18}$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{補足（実装上の注意）}
+本実験は 8-bit JPEG を入力としており，入力段で量子化誤差を含む．
+また Legacy 系では $[0,1]$ へのクリッピングを含むため，ガマット外処理の影響も測定値に含まれる．
+ただし両者の比較は「同一の 1D トーン関数を適用する際に，
+分解を linear light で行うか／sRGB 空間で行うか」という順序差に着目しており，
+評価は $1+2$ 分割の定義と整合するよう linear light 上で行っている．
+
+
+% ============================================================
+\section{結論}
+\label{sec:conclusion}
+
+本稿では，多くの色空間に共通して現れる
+「主軸 1 次元＋残差 2 次元」という $1+2$ 構造を，
+scene-linear（linear light）上で整合的に扱うための最小枠組みとして，
+双対ペア $(u,\ell)$ に基づく直和分解と
+一軸非線形演算子からなる CONJ を導入した．
+
+本稿の主張は，特定の既存色空間や符号化方式の優劣を論じることではなく，
+\textbf{主軸と残差を定めるペア $(u,\ell)$ の選択と，
+その正規化条件}
+\begin{equation}
+  \ell(u)=1
+\end{equation}
+が，
+主軸処理と残差処理の独立性（クロストーク抑制）を
+構造的に決定する，という点にある．
+
+この正規化のもとでは任意の $x\in V$ が
+\begin{equation}
+  x=\ell(x)\,u+r,\qquad r\in\ker\ell
+\end{equation}
+と一意に分解され，$V=\mathrm{span}(u)\oplus\ker\ell$ が成立する．
+この分解に基づき，一軸非線形 $\varphi$ を主軸スカラーのみに作用させる
+CONJ 演算子
+\begin{equation}
+  T_\varphi(x)
+  =\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr)
+  \label{eq:conj_conclusion}
+\end{equation}
+を定義すると，理想的な実数演算のもとでは
+残差 $r$ は $\varphi$ の具体形に依存せず代数的に不変となる．
+
+sRGB，YCbCr，CIELAB，IPT，ICtCp，Oklab などの代表的な色空間は，
+外形的には $1+2$ 構造を備えているが，
+多くは「非線形を先に適用し，その後に $1+2$ 分解を導入する」
+型（$N3\rightarrow S$）として設計されている．
+この場合，scene-linear 空間に引き戻して残差を評価すると，
+CONJ の意味での残差不変性は一般には保証されない．
+本稿では，この点を構造的に整理した．
+
+scene-linear sRGB および scene-linear XYZ を対象とした数値実験では，
+従来型パイプライン（非線形 $\rightarrow$ 分解）と
+CONJ 型パイプライン（分解 $\rightarrow$ 一軸非線形）を比較した結果，
+従来型では $10^{-2}$ オーダーの残差変動が観測される一方，
+CONJ 型では倍精度浮動小数点演算の丸め誤差レベルまで低減されることを確認した．
+
+さらに，実写画像に対する検証においても，
+同一の一軸トーン操作を適用した場合に，
+CONJ は $C_{\mathrm{img}}$ および $\Delta\Sigma_{\mathrm{img}}$ を
+丸め誤差レベルまで低減し，
+残差成分への混入が抑制されることを確認した．
+一方で，非線形（sRGB）空間で分解を行う簡約手続き（Legacy）では，
+scene-linear 上で評価したときに残差変動が残ることが観測された．
+この結果は，「分解と一軸非線形の前後関係」がクロストーク量を左右するという本稿の整理と整合的である．
+
+本稿で示した残差不変性は式 \eqref{eq:conj_conclusion} に基づく代数的性質であり，
+有限精度演算，量子化（3DLUT 等），
+クリッピングやガマット外処理を含む実装では成立範囲が制限され得る．
+したがって，実装条件下で
+「どこまでを実質的に不変として扱えるか」を定量化し，
+符号化効率や知覚差指標との関係まで含めて検証することが今後の課題である．
+
+以上より，CONJ は，
+\textbf{（i）主軸と残差平面の線形構造を保ったまま，
+（ii）主軸にのみ非線形自由度を導入できる}
+という点で，
+scene-linear 層における色空間設計および符号化処理を整理・再設計するための
+最小かつ汎用的なテンプレートを与える．
+
+\paragraph{Code availability.}
+本プレプリントに対応する参照実装および実験スクリプトは，
+以下の GitHub リポジトリで公開している：
+\url{https://github.com/goldkiss2010-ai/conj-preprint}.
+
+% ============================================================
+\section{展望：後続研究に向けた論点}
+\label{sec:future}
+
+本稿の範囲では，双対ペア正規化 $\ell(u)=1$ のもとで定義される CONJ が，
+理想的な実数演算において残差平面を不変に保つこと，
+および代表的な従来手続きと比較して数値実験上のクロストークが大きく異なることを示した
+（第\ref{sec:experiments}章）．
+本章では，後続研究として切り出しやすい論点を簡潔に列挙する．
+
+\subsection{有限精度・量子化下での「事実上の不変性」}
+\label{subsec:future_quant}
+残差不変性は代数的性質である一方，実装では有限精度が支配的となる．
+後続研究では，以下を独立変数として「不変性が実用上成立する領域」を定量化することが有用である：
+\begin{itemize}
+  \item 浮動小数点精度（float64/float32/fp16），固定小数点化
+  \item 3DLUT 量子化（例：$17^3,33^3,65^3$）と補間方式（trilinear/tetrahedral 等）
+  \item パイプライン中の丸め位置（前変換／$\varphi$／後変換）
+\end{itemize}
+指標としては，第\ref{sec:experiments}章の $C(F;D)$ と $\Delta\Sigma(F)$ を，
+量子化条件ごとに再計測するだけで比較可能である．
+
+\subsection{クリッピング・ガマット外処理を含む運用条件}
+\label{subsec:future_clip}
+残差不変性は $\ker\ell$ 上の構造に依存するため，クリッピングやガマット外処理は主要な破れ要因となる．
+後続研究では，次を切り分けて評価することが望ましい：
+\begin{itemize}
+  \item クリッピング無し（理想）／各段でのクリッピング有り（実運用）
+  \item ガマット外処理（単純クリップ／射影／ガマットマッピング）による差
+  \item HDR（大きなダイナミックレンジ）における $\varphi$ とレンジ管理の結合
+\end{itemize}
+この論点は「残差平面を保つ」という設計目標と，安全な表示域・符号化域への射影との間のトレードオフとして整理できる．
+
+\subsection{$(u,\ell)$ の選択・推定の体系化}
+\label{subsec:future_pair}
+本稿では $(u,\ell)$ を与えた上での性質を中心に述べたが，実用上は「どの $(u,\ell)$ が良いか」が主要問題となる．
+後続研究として，次の方向が自然である：
+\begin{itemize}
+  \item 規格に基づく固定（例：$XYZ$ の $Y$，規格行列に基づく線形輝度）
+  \item データ駆動（例：局所分布に対する主成分・KLT 的選択，あるいは目的関数最適化）
+  \item 条件付き選択（シーン依存／露出域依存）と，切替による不連続の抑制
+\end{itemize}
+評価は，クロストーク指標に加え，量子化誤差の増幅やクリップ耐性を含む多目的最適化として定式化できる．
+
+\subsection{符号化・編集パイプラインへの接続}
+\label{subsec:future_codec}
+CONJ の「主軸スカラーへの 1D 非線形」と「残差平面の保持」という分離は，
+符号化・編集の設計単位として扱いやすい．後続研究では，例えば以下を検討対象とできる：
+\begin{itemize}
+  \item トーンマッピング／露出調整の主軸化と，色差成分の安定保持
+  \item 既存の $1+2$ 表現（YCbCr 等）に対し，分割順序の再設計でクロストークを低減する可能性
+  \item レート制御・量子化と残差統計（$\Delta\Sigma$）の関係付け
+\end{itemize}
+これらは理論主張の拡張というより，運用制約下での「どの程度の利得が得られるか」を測る工学研究として位置づけられる．
+
+% ============================================================
+\appendix
+\section{双対ペアに基づく 1+2 分解と一軸非線形作用素}
+\label{app:dualpair}
+
+\subsection{設定と記法}
+実ベクトル空間 $V$ とその代数的双対 $V^*:=\mathrm{Hom}(V,\mathbb{R})$ を考える．
+評価写像（ペアリング）を
+\[
+\langle \ell, x\rangle := \ell(x)\qquad (\ell\in V^*,\,x\in V)
+\]
+と書く．
+
+\subsection{双対ペアと付随する射影}
+\begin{definition}[（正規化）双対ペアと付随する射影]
+$u\in V$，$\ell\in V^*$ が
+\[
+\langle \ell,u\rangle = 1
+\]
+を満たすとき，$(u,\ell)$ を（正規化）双対ペアと呼ぶ．
+このとき線形写像 $Q,P:V\to V$ を
+\[
+Q(x) := \langle \ell,x\rangle\,u,\qquad P := I-Q
+\]
+で定める（$I$ は恒等写像）．
+\end{definition}
+
+\begin{lemma}[ランク1射影と $1+2$ 分解]
+上の $Q,P$ について，次が成り立つ：
+\[
+Q^2=Q,\quad P^2=P,\quad PQ=QP=0,
+\]
+さらに
+\[
+\mathrm{Im}\,Q=\mathrm{span}(u),\qquad \ker Q=\ker \ell,\qquad \mathrm{Im}\,P=\ker\ell .
+\]
+従って直和分解
+\[
+V=\mathrm{span}(u)\oplus \ker\ell
+\]
+が成り立ち，任意の $x\in V$ は一意に
+\[
+x = \underbrace{\langle \ell,x\rangle}_{=:Y(x)}u + \underbrace{P(x)}_{=:r(x)},\qquad r(x)\in\ker\ell
+\]
+と書ける．
+\end{lemma}
+
+\begin{proof}
+任意の $x\in V$ に対し，
+\[
+Q^2(x)=Q(\langle \ell,x\rangle u)=\langle \ell,x\rangle\langle \ell,u\rangle u=Q(x)
+\]
+より $Q^2=Q$．$P=I-Q$ から $P^2=(I-Q)^2=I-2Q+Q^2=I-Q=P$．
+また $PQ=P(I-P)=P-P^2=0$，同様に $QP=(I-P)P=0$．
+
+像については $Q(x)=\langle \ell,x\rangle u$ より $\mathrm{Im}\,Q=\mathrm{span}(u)$．
+核については
+\[
+Q(x)=0 \iff \langle \ell,x\rangle=0 \iff x\in\ker\ell
+\]
+より $\ker Q=\ker\ell$．
+
+次に $\mathrm{Im}\,P=\ker\ell$ を示す．
+$x\in\ker\ell$ なら $Q(x)=0$ なので $P(x)=x$，従って $\ker\ell\subset \mathrm{Im}\,P$．
+逆に任意の $x$ について
+\[
+\langle \ell,P(x)\rangle=\langle \ell,x-Q(x)\rangle
+=\langle \ell,x\rangle-\langle \ell,x\rangle\langle \ell,u\rangle=0
+\]
+より $\mathrm{Im}\,P\subset\ker\ell$．よって $\mathrm{Im}\,P=\ker\ell$．
+
+最後に任意の $x$ に対し $x=Q(x)+P(x)$，
+かつ $Q(x)\in\mathrm{span}(u)$，$P(x)\in\ker\ell$ が従う．
+交わりが $\{0\}$ であることは，
+$v\in \mathrm{span}(u)\cap\ker\ell$ として $v=au$ とおくと
+$0=\langle \ell,v\rangle=a\langle \ell,u\rangle=a$ より $a=0$，従って $v=0$．
+よって直和分解と分解の一意性が従う．
+\end{proof}
+
+\subsection{一軸非線形作用素（残差不変性）}
+\begin{definition}[一軸非線形作用素]
+関数 $\varphi:\mathbb{R}\to\mathbb{R}$ に対し，$T_\varphi:V\to V$ を
+\[
+T_\varphi(x):=\varphi(\langle \ell,x\rangle)u + P(x)
+\]
+で定める．
+\end{definition}
+
+\begin{lemma}[残差不変性（射影表示）]
+上の $T_\varphi$ について，任意の $x\in V$ に対し
+\[
+P(T_\varphi(x))=P(x)
+\]
+が成り立つ．
+\end{lemma}
+
+\begin{proof}
+$P(u)=0$ と $P^2=P$ を用いれば，
+\[
+P(T_\varphi(x))
+= P\bigl(\varphi(\langle \ell,x\rangle)u + P(x)\bigr)
+= \varphi(\langle \ell,x\rangle)P(u) + P^2(x)
+= P(x).
+\]
+\end{proof}
+
+
+% ============================================================
+% Bibliography
+% ============================================================
+\bibliographystyle{unsrtnat}
+\bibliography{CONJ_updated_plus_cc.bib}
+
+\end{document}
