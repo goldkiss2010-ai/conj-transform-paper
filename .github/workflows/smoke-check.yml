@@ -1,0 +1,29 @@
+name: smoke-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run uniform-samples experiment (smoke)
+        run: python scripts/conj_experiment.py
+
+      - name: Run image experiment (smoke)
+        run: |
+          python scripts/vsLegacy_paper.py --outdir /tmp/conj-smoke-output
