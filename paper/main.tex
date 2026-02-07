@@ -30,8 +30,8 @@
 % Title
 % =========================================================
 \title{CONJ Transform：正規化双対ペアに基づく 1+2 分解と\mbox{クロストーク}抑制}
-\author{横田新之介（横田ブンガク）}
-\date{2026年　2月6日}
+\author{横田ブンガク}
+\date{\today}
 
 \begin{document}
 \maketitle
@@ -39,7 +39,7 @@
 \vspace*{1.0em}
 \begin{center}
 \footnotesize
-© 2026 Shinnosuke Yokota. This preprint is licensed under
+© 2026 Bungaku Yokota. This preprint is licensed under
 Creative Commons Attribution 4.0 International (CC BY 4.0).\\
 本プレプリントは CC BY 4.0（表示 4.0 国際）により提供されます。\\
 No freedom-to-operate (FTO) search is provided here.
@@ -71,7 +71,7 @@ No freedom-to-operate (FTO) search is provided here.
 すなわち，分割（主軸と残差部分空間の選択）と正規化のみから，
 非線形主軸操作下でも残差を幾何学的に不変に保つための設計条件が得られる．
 
-一様乱数サンプルおよび実写画像に対する数値実験では，従来型パイプライン（例：ガンマ後の Y′CbCr 操作，CIELAB 明度操作）において，
+一様乱数サンプルおよび実写画像に対する数値実験では，従来型パイプライン（例：ガンマ補正後の Y′CbCr 操作，CIELAB 明度操作）において，
 一様乱数では $10^{-2}$ オーダー，実写画像でも $10^{-3}$ オーダーのクロストークが観測される一方，
 提案法では倍精度浮動小数点演算の丸め誤差レベルまで低減されることを確認した．
 
@@ -233,7 +233,7 @@ YCbCr 系の色差表現や，知覚空間（CIELAB など）における明度�
 これを CONJ Transform（以下，CONJ 変換）と呼ぶ．
 
 1 変数の実関数 $\varphi:\mathbb{R}\to\mathbb{R}$ を用意する．これは輝度スカラー $Y$ を別のスカラー $\varphi(Y)$ に写すトーンカーブであり，
-ガンマ関数，トーンマッピング，ロールオフなどを含む任意の非線形を想定する \citep{reinhard2005hdr,itur_bt2100}．
+ガンマ補正関数，トーンマッピング，ロールオフなどを含む任意の非線形を想定する \citep{reinhard2005hdr,itur_bt2100}．
 
 組 $(u,\ell)$（双対ペア正規化 \eqref{eq:dualpair_norm} を満たすもの）を固定したとき，入力信号 $x\in V$ に対する CONJ 変換 $T_\varphi$ は，次の手順で定義される：
 \begin{enumerate}
@@ -263,9 +263,6 @@ YCbCr 系の色差表現や，知覚空間（CIELAB など）における明度�
   \tag{11}\label{eq:conj_def}
 \end{equation}
 と書ける．すなわち，入力を一度「輝度スカラー $Y(x)$ と残差ベクトル $r(x)$」に分解し，輝度スカラーだけを任意の 1 次元非線形 $\varphi$ で変形し，残差ベクトルはそのままの位置に保ったまま再合成する，という構造である．
-
-実装上は，$(u,\ell)$ に整合する「（輝度，残差）」形式への $3\times 3$ 線形変換を一つ用意し，輝度チャネルだけを 1 次元 LUT に通し，同じ $(u,\ell)$ から得られる逆変換で元の空間 $V$ に戻す，という流れで実現できる．
-行列表現や変換行列の具体的構成は\ref{app:dualpair}に詳述し，本節では CONJ 変換の構造的な定義にとどめる．
 
 \subsection{残差成分の不変性（命題と証明）}
 CONJ 変換の核心は，「トーンカーブ $\varphi$ を 1 次元の関数として適用する限り，
@@ -332,7 +329,7 @@ LogLuv \citep{larson1998logluv}
 \item $N1$：1 次元非線形（主軸スカラー $Y$ のみに作用）．
       すなわち $Y\mapsto\varphi(Y)$ であり，他の成分には直接作用しない．
 \item $N3$：3 次元非線形（作業空間の 3 成分全体に作用）．
-      典型例はガンマや立方根型の圧縮関数などである．
+      典型例はガンマ補正や立方根型の圧縮関数などである．
 \end{itemize}
 
 また，「残差平面」の列は，主軸の操作が残差平面上の位置を変えないという意味での
@@ -405,9 +402,9 @@ CIELAB \citep{cie1976lab}，IPT/ICtCp \citep{ebner1998ipt,dolby2016ictcp,itur_bt
 本稿の立場では，この差は「設計目的の違い」として整理される．
 
 \subsection{$R'G'B'$ を作業空間とする分割：YCbCr の位置づけ}
-YCbCr は $R'G'B'$（ガンマ後 RGB）を作業空間として，
+YCbCr は $R'G'B'$（ガンマ補正後 RGB）を作業空間として，
 線形結合により輝度相当の量と色差を構成する \citep{itur_bt601,itur_bt709}．
-見かけ上は $1+2$ 形式であるが，分割の前にガンマが三成分全体へ作用しているため，
+見かけ上は $1+2$ 形式であるが，分割の前にガンマ補正が三成分全体へ作用しているため，
 主軸操作と残差操作の独立性（残差平面不変性）は一般には保証されない．
 本稿では，この構造を $N3\rightarrow S$ の代表例として整理する．
 
@@ -624,6 +621,40 @@ $\ell(u)=1$ という正規化条件}が，
 クロマ不変性を決定的に左右することを，
 数値実験により検証する。
 
+\paragraph{読者ガイド（本章の目的）}
+本章の比較は，厳密な規格準拠パイプラインの再現ではなく，
+「非線形をどの段に置くか（非線形$\to$分解／分解$\to$非線形）」という順序の差が，
+scene-linear 層に引き戻した残差にどの程度クロストークとして現れるかを可視化するための
+\textbf{簡約モデル}である．
+sRGB/XYZ/BT.709 などの表記は「現場で典型的に現れる定義」を代表させるために用いる．
+
+\subsection*{記号一覧（Notation）}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+記号 & 意味 \\
+\midrule
+$V$ & 色ベクトル空間（例：$\mathbb{R}^3$）\\
+$x$ & サンプル（画素）ベクトル（RGB/XYZなど）\\
+$u$ & 主軸ベクトル（無彩色軸・輝度軸など）\\
+$\ell$ & 読み取り汎関数（主軸スカラー；例：$\ell(x)=c^\top x$）\\
+$\ell(u)=1$ & 双対正規化（主軸と読み取りの整合条件）\\
+$P(x)$ & 残差射影：$P(x)=x-\ell(x)u\in\ker\ell$\\
+$r(x)$ & 残差：$r(x)=P(x)$\\
+$\phi$ & 1Dトーン関数（例：$\phi(s)=\max(s,0)^\alpha$）\\
+$\alpha$ & トーン関数の指数パラメータ\\
+$\gamma$ & ガンマ補正（Legacy側の非線形；簡約モデル）\\
+$F$ & パイプライン全体を表す写像（Legacy/CONJ）\\
+$D$ & 評価サンプル集合（乱数サンプル or 画素集合）\\
+$C(F;D)$ & クロストーク指標（式\eqref{eq:crosstalk}）\\
+$\Sigma,\ \Delta\Sigma$ & 残差共分散とその差（式\eqref{eq:deltasigma}）\\
+$\|\cdot\|_2,\ \|\cdot\|_F$ & $\ell_2$ノルム，Frobeniusノルム\\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{設定：基準空間と双対ペアの正規化}
 \label{subsec:setup}
 
@@ -738,6 +769,13 @@ Y'\mapsto \mathrm{clip}(Y',0,1)^\alpha
 \]
 である。
 
+\paragraph{注記（Legacy の簡約）}
+本稿の $R'G'B'\leftrightarrow Y'CbCr$ は，順序不整合を代表させるための
+\textbf{簡易モデル}であり，規格におけるレンジ（limited/full）やオフセット，
+量子化を含む厳密な伝送実装の再現を目的としない．
+使用した具体式は付録Bを参照．
+
+
 \paragraph{CONJ パイプライン}
 CONJ では scene-linear 層で分解を行い，
 主軸成分のみに非線形を適用する：
@@ -832,6 +870,9 @@ $\ell_Y(u_Y)=1$ による直和分解が
   x_{\mathrm{lin}} := E^{-1}(x_{\mathrm{srgb}})
 \end{equation}
 を得る．
+
+\noindent
+\textit{（注）} $E^{-1}$ は sRGB 逆EOTF（成分ごと）であり，具体式は付録Bに示す．
 
 \subsection{双対ペア（主軸・残差の定義）}
 主軸は Rec.\,709 / sRGB の線形輝度係数
@@ -1169,6 +1210,46 @@ P(T_\varphi(x))
 = P(x).
 \]
 \end{proof}
+
+\section{実験で用いた簡易変換の定義（補足）}
+\subsection{簡易 $R'G'B' \leftrightarrow Y'CbCr$（フルレンジ）}
+本稿の Legacy では，順序不整合を代表させるため，
+BT.709 係数 $(K_r,K_g,K_b)=(0.2126,0.7152,0.0722)$ を用いた
+フルレンジの簡易変換を採用する（オフセットや量子化レンジは扱わない）．
+
+\paragraph{前向き変換}
+\[
+Y' = K_r R' + K_g G' + K_b B',
+\quad
+Cb = \frac{B'-Y'}{2(1-K_b)},
+\quad
+Cr = \frac{R'-Y'}{2(1-K_r)}.
+\]
+
+\paragraph{逆変換}
+\[
+R' = Y' + 2(1-K_r)\,Cr,
+\quad
+B' = Y' + 2(1-K_b)\,Cb,
+\quad
+G' = \frac{Y' - K_r R' - K_b B'}{K_g}.
+\]
+
+\subsection{sRGB の逆EOTF（linear light への復元）}
+実写実験では入力 $x_{\mathrm{srgb}}\in[0,1]$ を linear light に統一するため，
+成分ごとに sRGB 逆EOTF を適用する：
+\[
+E^{-1}(v)=
+\begin{cases}
+\frac{v}{12.92}, & v\le 0.04045,\\[4pt]
+\left(\frac{v+0.055}{1.055}\right)^{2.4}, & v>0.04045.
+\end{cases}
+\]
+
+\noindent
+\textit{注} これらの式は規格の完全な実装条件（符号化レンジ・量子化・オフセット等）を省略した
+簡約形であり，本稿では順序不整合の効果を明確化する目的で用いる．
+
 
 
 % ============================================================
