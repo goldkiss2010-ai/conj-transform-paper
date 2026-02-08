@@ -7,7 +7,8 @@ authors:
     given-names: "Bungaku"
     name-particle: ""
 version: "v0.1-smoke-ok"
-date-released: "2026-02-08"
+date-released: "2026-02-06"
+Made public on 2026-02-08 (JST).
 url: "https://github.com/<OWNER>/<REPO>"
 license: "Apache-2.0"
 preferred-citation:
