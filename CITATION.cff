@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the preprint and this reproducibility repository."
+type: software
+title: "CONJ Preprint – Reproducibility Repository"
+authors:
+  - family-names: "Yokota"
+    given-names: "Bungaku"
+    name-particle: ""
+version: "v0.1-smoke-ok"
+date-released: "2026-02-08"
+url: "https://github.com/<OWNER>/<REPO>"
+license: "Apache-2.0"
+preferred-citation:
+  type: article
+  title: "CONJ: Dual-Pair-Based 1+2 Decomposition with Residual Invariance"
+  authors:
+    - family-names: "Yokota"
+      given-names: "Bungaku"
+  year: 2026
+  month: 2
+  version: "v0.9"
+  notes: "Self-published preprint (not peer-reviewed). See paper/CONJ_paper_20260208.pdf."

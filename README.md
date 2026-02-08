@@ -1,3 +1,5 @@
+Questions & feedback: Please use Discussions (preferred) or Issues.
+
 # CONJ Preprint – Reproducibility Repository
 
 This repository provides **reproducibility materials** for the CONJ preprint paper.
@@ -33,6 +35,8 @@ See the preprint notice inside the PDF for license and disclaimer details.
 
 This repository is **not** intended to be a general-purpose library.
 
+PRs welcome for typos/links only. For technical changes, please open an Issue first.
+
 ---
 
 ## Repository Structure
@@ -49,7 +53,7 @@ This repository is **not** intended to be a general-purpose library.
 ├─ results/
 │  └─ YKT_3336_paper_metrics.json
 ├─ paper/
-│  └─ CONJ_preprint.pdf
+│  └─ CONJ_paper_20260208.pdf
 ├─ README.md
 └─ LICENSE
 
@@ -145,5 +149,10 @@ See `LICENSE` for details.
 
 * Paper version: v0.9
 * Repository tag: **v0.1-smoke-ok**
+
+Yokota, Bungaku. "CONJ: Dual-Pair-Based 1+2 Decomposition with Residual Invariance."
+Self-published preprint (v0.9), February 2026.
+Reproducibility repository: v0.1-smoke-ok. https://github.com/goldkiss2010-ai/conj-transform-paper
+
 
 The paper explicitly references this repository tag for reproducibility.
