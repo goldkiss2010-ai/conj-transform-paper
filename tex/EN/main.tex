@@ -1,0 +1,1171 @@
+\documentclass[dvipdfmx]{jsarticle}
+
+% =========================================================
+% Packages
+% =========================================================
+\usepackage{amsmath,amssymb}
+\usepackage{mathtools} % amsmath拡張（eqref等の安定性）
+\usepackage{amsthm}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{bm}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc}
+
+% URL breaking (long URLs)
+\usepackage{xurl}
+
+% Citations / references
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[dvipdfmx,bookmarks=true,bookmarksnumbered=true]{hyperref}
+
+% --- English date (Month DD, YYYY) for jsarticle ---
+\newcommand{\EngToday}{%
+  \ifcase\month\or
+  January\or February\or March\or April\or May\or June\or
+  July\or August\or September\or October\or November\or December\fi
+  \space \number\day, \number\year
+}
+
+% =========================================================
+% Numbering (揺れ止め)
+% =========================================================
+\numberwithin{equation}{section}
+
+% =========================================================
+% Theorem environments
+% =========================================================
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}[theorem]{Definition}
+
+% Proof 見出し（英語のまま）
+\renewcommand{\proofname}{Proof}
+
+% =========================================================
+% Force English section names (jsarticle)
+% =========================================================
+\AtBeginDocument{%
+  \renewcommand{\abstractname}{abstract}%
+  \renewcommand{\appendixname}{Appendix}%
+  \renewcommand{\refname}{References}%
+  \renewcommand{\bibname}{References}%
+  \renewcommand{\contentsname}{Contents}%
+  \renewcommand{\figurename}{Figure}%
+  \renewcommand{\tablename}{Table}%
+}
+
+
+% =========================================================
+% Title
+% =========================================================
+\title{CONJ: Dual-Pair-Based 1+2 Decomposition with Residual Invariance}
+\author{{Bungaku Yokota}}
+\date{\EngToday}
+
+\begin{document}
+\maketitle
+
+\vspace*{1.0em}
+\begin{center}
+\footnotesize
+© 2026 Bungaku Yokota. This preprint is licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0).\\
+No freedom-to-operate (FTO) search is provided here.
+\end{center}
+\vspace*{0.5em}
+
+% =========================================================
+\begin{abstract}
+Many color spaces and image/video processing pipelines adopt a $1+2$ structure that decomposes a three-dimensional color signal into a one-dimensional principal axis and a two-dimensional residual.
+However, when nonlinear operations such as gamma correction, tone mapping, or roll-off are applied along the principal-axis direction, the residual component (chroma) generally varies as a by-product of the principal-axis manipulation, resulting in chroma shift (crosstalk).
+
+In this paper, we treat the working space as an arbitrary three-dimensional real vector space $V$.
+Given a pair $(u,\ell)\in V\times V^*$ satisfying the normalization $\ell(u)=1$ (a normalized dual pair), we introduce the $1+2$ decomposition
+\[
+  x=\ell(x)u+r(x),\qquad r(x):=x-\ell(x)u\in\ker\ell,
+\]
+that is, $V=\mathrm{span}(u)\oplus\ker\ell$.
+Along this decomposition, we define the map
+\[
+  T_\varphi(x)=\varphi(\ell(x))u+r(x),
+\]
+which applies an arbitrary scalar nonlinearity $\varphi$ only to the principal-axis coordinate $\ell(x)$ (the CONJ transform), and show that for the projection $P(x):=x-\ell(x)u$,
+\[
+  P(T_\varphi(x))=P(x)
+\]
+holds for any $\varphi$.
+Thus, from only the choice of the decomposition (the principal axis and the residual subspace) together with the normalization, we obtain a design condition that keeps the residual geometrically invariant under arbitrary nonlinear principal-axis operations.
+
+Numerical experiments on uniform random samples and real photographs confirm that conventional pipelines (e.g., Y′CbCr operations after gamma correction, or lightness operations in CIELAB) exhibit crosstalk on the order of $10^{-2}$ for uniform random inputs and $10^{-3}$ for real images, whereas the proposed method reduces it to the rounding-error level of double-precision floating-point arithmetic.
+
+The proposed framework assumes neither a specific reference stimulus space (e.g., XYZ) nor a specific implementation pipeline.
+For an arbitrary three-channel working space, it provides a design principle that separates tone operations as a one-dimensional mapping along the principal axis while preserving the two-dimensional residual component pointwise.
+It does not, however, directly address issues that depend on gamut constraints, clipping, quantization, or other implementation-dependent effects over line segments; rather, its scope is to strongly guarantee geometric consistency (independence between the principal axis and the residual) at the tone-operation stage.
+\end{abstract}
+
+\section{Introduction}
+
+In digital image/video processing and coding, a $1+2$ structure that decomposes a three-dimensional color signal into a one-dimensional luminance component and a two-dimensional chroma component is widely used.
+Typical examples include YCbCr-type color-difference representations and the separation of lightness and chromatic components in perceptual spaces such as CIELAB
+\cite{cie15_2018,cie1976lab,iec61966-2-1}.
+In practical pipelines, however, nonlinear operations such as gamma correction, tone mapping, roll-off, and HDR/SDR mapping are unavoidable \cite{reinhard2005hdr},
+and the chroma component often varies as a consequence of luminance-side operations (chroma shift), which becomes a recurring issue
+\cite{mantiuk2009cctm,mehmood2024generic_cc}.
+A variety of post-tone-mapping color-correction and saturation-adjustment methods have been proposed, yet achieving both color-appearance preservation and luminance compression typically requires manual tuning and involves trade-offs
+\cite{mantiuk2009cctm,mehmood2024generic_cc}.
+
+In this paper, we regard chroma shift not as an inherent limitation of a particular color space, but as a consequence of the \emph{order of operations}---namely,
+\emph{at which stage a $1+2$ split is performed and to which component the nonlinearity is applied}.
+Even when the underlying signal is the same three-dimensional space $V$, the difference between
+\begin{itemize}
+  \item applying a nonlinearity only to the principal-axis scalar after splitting ($S\to N1$), and
+  \item applying a nonlinearity to the three channels first and splitting afterwards ($N3\to S$)
+\end{itemize}
+essentially determines whether crosstalk between luminance and chroma occurs.
+
+The core of this work is as follows.
+We treat the working space as an arbitrary three-dimensional real vector space $V$ and fix a pair $(u,\ell)\in V\times V^*$ satisfying the normalization $\ell(u)=1$.
+We then define the residual
+\[
+  r(x):=x-\ell(x)u,\qquad r(x)\in\ker\ell,
+\]
+and apply an arbitrary scalar nonlinearity $\varphi$ only to the principal-axis scalar $\ell(x)$ via the map
+\[
+  T_\varphi(x):=\varphi(\ell(x))u+r(x),
+\]
+which we call the \emph{CONJ transform}.
+For the projection $P(x):=x-\ell(x)u$, we have
+\[
+  P(T_\varphi(x))=P(x)
+\]
+identically, so that the residual (chroma) is exactly invariant and does not depend on the specific form of $\varphi$.
+In what follows, we refer to $r(x)$ as the \emph{residual (residual component)} and $\ker\ell$ as the \emph{residual subspace}.
+
+The contributions of this paper can be summarized as follows.
+\begin{enumerate}
+  \item We introduce a $1+2$ decomposition based on a normalized dual pair satisfying $\ell(u)=1$, and define the CONJ transform $T_\varphi$ as the composition of this split and a one-axis nonlinearity.
+  \item We show that the residual invariance $P(T_\varphi(x))=P(x)$ does not depend on the specific form of $\varphi$, and provide a design condition that structurally eliminates crosstalk under nonlinear principal-axis operations.
+  \item Using uniform random samples and real photographs, we confirm that, compared with conventional pipelines (which decompose and manipulate signals in a nonlinear domain), the CONJ-type pipeline reduces the observed residual variation down to the rounding-error level of double-precision computation.
+\end{enumerate}
+
+\paragraph{Scope and limitations.}
+The CONJ transform studied in this paper formulates tone operations on a three-channel signal as a one-dimensional mapping along a principal axis, with the goal of preserving the two-dimensional residual component (chroma) exactly at each point.
+Accordingly, the proposed framework does not directly resolve issues that depend on gamut constraints, clipping, quantization, or implementation-dependent effects over entire line segments such as boundary intersections and endpoint behavior.
+These are design problems orthogonal to the present focus.
+The scope of this paper is therefore limited to providing a design principle that strongly guarantees the geometric consistency of luminance--chroma separation at the tone-operation stage.
+
+% =========================================================
+\section{Proposed Method: CONJ Transform}
+
+\subsection{Signal space and assumptions}
+In this paper, we treat pixel values in a working color space as triples of real numbers.
+The target is an arbitrary three-channel signal, which we regard as an element of a three-dimensional real vector space $V$.
+We do not assume a specific choice of basis (e.g., RGB, XYZ, or Lab), nor do we assume a particular inner product.
+The only structure required is the minimal one: \emph{$V$ is a three-dimensional linear space}.
+
+The goal of this section is to choose, within $V$,
+\begin{itemize}
+\item a vector $u\in V$ representing a principal axis (to be treated as a luminance/neutral direction), and
+\item a linear functional $\ell\in V^*:=\mathrm{Hom}(V,\mathbb{R})$ that reads out the scalar coordinate along that principal axis,
+\end{itemize}
+and to use the pair $(u,\ell)$ to split the signal into a one-dimensional principal-axis component and a two-dimensional residual component, on top of which we define the CONJ transform.
+A central point is that, prior to discussing \emph{where} a nonlinearity is placed, the decisive choice is \emph{how} the principal axis $u$ and the readout $\ell$ (i.e., the $1+2$ decomposition) are selected.
+
+\subsection{Principal axis and residual plane: $1+2$ decomposition and dual-pair normalization}
+Choose a nonzero vector $u\in V$, which will be treated as the \emph{principal axis} (luminance direction).
+Next, introduce a linear functional $\ell:V\to\mathbb{R}$ to read out the scalar component along the principal axis.
+At the implementation level, this corresponds to a weighted sum of the three channels.
+For example, in an RGB coordinate system, with coefficients $(\ell_R,\ell_G,\ell_B)$, it can be written as
+\begin{equation}
+  \ell(x)=\ell_R x_R+\ell_G x_G+\ell_B x_B .
+  \label{eq:l_readout}
+\end{equation}
+
+To fix the scale ambiguity of $(u,\ell)$, we adopt the following \emph{dual-pair normalization}:
+\begin{equation}
+  \ell(u)=1 .
+  \label{eq:dualpair_norm}
+\end{equation}
+For a general pair $(u,\ell)$ with $\ell(u)\neq 0$, one can normalize it to satisfy \eqref{eq:dualpair_norm}, for example by $u\leftarrow u/\ell(u)$.
+Hereafter, unless stated otherwise, we assume that $(u,\ell)$ satisfies the dual-pair normalization \eqref{eq:dualpair_norm} (and we keep the same notation after normalization).
+
+Under this condition, any signal $x\in V$ can be decomposed as
+\begin{equation}
+  x=\ell(x)\,u+\bigl(x-\ell(x)u\bigr) .
+  \label{eq:decomp_basic}
+\end{equation}
+The first term is the component along the principal axis, and the second term is the remainder.
+Define
+\begin{equation}
+  Y(x):=\ell(x),
+  \label{eq:def_Y}
+\end{equation}
+\begin{equation}
+  r(x):=x-Y(x)u .
+  \label{eq:def_r}
+\end{equation}
+We call $Y(x)$ the principal-axis scalar (hereafter, the \emph{luminance scalar}) and $r(x)$ the \emph{residual component}.
+In what follows, we refer to $r(x)$ as the \emph{residual (residual component)} and to $\ker \ell$ as the \emph{residual subspace}.
+In particular, when $\dim V = 3$, $\ker \ell$ is a two-dimensional plane, so for intuition we also call it the \emph{residual plane}.
+
+For the residual, by linearity and the normalization \eqref{eq:dualpair_norm},
+\begin{equation}
+  \ell\!\bigl(r(x)\bigr)
+  =\ell\!\bigl(x-\ell(x)u\bigr)
+  =\ell(x)-\ell(x)\ell(u)
+  =0
+  \label{eq:r_in_ker}
+\end{equation}
+holds, so $r(x)$ lies in the kernel of $\ell$,
+\[
+  \ker\ell:=\{v\in V\mid \ell(v)=0\}.
+\]
+Therefore, any $x$ can be represented as the sum of
+\begin{itemize}
+\item the point $Y(x)u$ on the line $\mathbb{R}u$, and
+\item the point $r(x)$ on the plane $\ker\ell$.
+\end{itemize}
+Moreover, the representation is unique because $\mathbb{R}u\cap\ker\ell=\{0\}$ (indeed, if $v=au$ and $\ell(v)=0$, then $0=\ell(v)=a\ell(u)=a$).
+Thus we obtain the direct-sum decomposition
+\begin{equation}
+  V=\mathbb{R}u\oplus \ker\ell
+  \label{eq:directsum}
+\end{equation}
+into a one-dimensional principal axis and a two-dimensional residual plane (a more general discussion is summarized in Appendix~\ref{app:dualpair}).
+
+Hereafter, by the ``$1+2$ structure'' we mean the structure based on the direct-sum decomposition \eqref{eq:directsum} induced by the pair $(u,\ell)$ together with the dual-pair normalization \eqref{eq:dualpair_norm}.
+
+\subsection{Definition of the CONJ transform}
+Next, on top of this $1+2$ structure, we define a transform that applies an arbitrary nonlinearity to the luminance scalar while leaving the residual component unchanged.
+We call this the \emph{CONJ Transform} (CONJ transform, hereafter simply the CONJ transform).
+
+Let $\varphi:\mathbb{R}\to\mathbb{R}$ be a real-valued function of one variable.
+It represents a tone curve that maps a luminance scalar $Y$ to another scalar $\varphi(Y)$, and may be any nonlinearity including gamma correction, tone mapping, and roll-off \citep{reinhard2005hdr,itur_bt2100}.
+
+Fix a pair $(u,\ell)$ satisfying the dual-pair normalization \eqref{eq:dualpair_norm}.
+For an input signal $x\in V$, the CONJ transform $T_\varphi$ is defined by the following procedure:
+\begin{enumerate}
+\item Use the luminance readout $\ell$ to compute the input luminance
+\begin{equation}
+  Y=\ell(x) .
+  \label{eq:Y_readout}
+\end{equation}
+\item Subtract the contribution along the principal axis to obtain the residual component
+\begin{equation}
+  r(x)=x-Yu ,
+  \label{eq:r_extract}
+\end{equation}
+and keep it unchanged.
+\item Apply the tone curve $\varphi$ to $Y$ to obtain the new luminance $\varphi(Y)$.
+\item Recompose by placing $\varphi(Y)$ along the principal axis and adding back the original residual:
+\begin{equation}
+  x'=\varphi(Y)\,u+r(x) .
+  \label{eq:recompose}
+\end{equation}
+\end{enumerate}
+Summarizing the procedure, the CONJ transform can be written as
+\begin{equation}
+  T_\varphi(x):=\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr) .
+  \label{eq:conj_def}
+\end{equation}
+That is, we first decompose the input into the luminance scalar $Y(x)$ and the residual vector $r(x)$, deform only the luminance scalar by an arbitrary one-dimensional nonlinearity $\varphi$, and then recompose while keeping the residual vector fixed.
+
+\subsection{Invariance of the residual component (proposition and proof)}
+The key property of the CONJ transform is that, as long as the tone curve $\varphi$ is applied as a one-dimensional function, the residual component is invariant \emph{under ideal real arithmetic}, regardless of the specific form of $\varphi$.
+In practice, finite-precision arithmetic and operations such as clipping may restrict the region in which this invariance effectively holds.
+
+We present a concise proof of this invariance.
+Under the dual-pair normalization \eqref{eq:dualpair_norm}, define linear maps $Q,P:V\to V$ by
+\[
+  Qx:=u\,\ell(x),\qquad P:=I-Q,
+\]
+where $I$ denotes the identity map.
+Then $Px=x-\ell(x)u=r(x)$, and $P$ acts as a projection onto the residual plane $\ker\ell$.
+Indeed, the normalization \eqref{eq:dualpair_norm} implies $Pu=u-\ell(u)u=0$, and also $P^2=P$ holds (see Appendix~\ref{app:dualpair} for details).
+
+\begin{proposition}[Residual invariance]
+For any pair $(u,\ell)$ satisfying the dual-pair normalization \eqref{eq:dualpair_norm} and any function $\varphi:\mathbb{R}\to\mathbb{R}$, the identity
+\[
+  P\bigl(T_\varphi(x)\bigr)=P(x)
+\]
+holds for all $x\in V$.
+That is, the CONJ transform preserves the residual component $r(x)=Px$.
+\end{proposition}
+
+\begin{proof}
+By the definition \eqref{eq:conj_def}, we can write $T_\varphi(x)=\varphi(\ell(x))u+Px$.
+Therefore,
+\[
+  P\bigl(T_\varphi(x)\bigr)=P\bigl(\varphi(\ell(x))u+Px\bigr)
+  =\varphi(\ell(x))\,Pu+P^2x
+  =0+Px
+  =P(x),
+\]
+where we used $Pu=0$ and $P^2=P$.
+\end{proof}
+
+Importantly, this property does not depend on the specific form of $\varphi$; it follows solely from the $1+2$ decomposition induced by $(u,\ell)$ and the dual-pair normalization \eqref{eq:dualpair_norm}.
+Therefore, once the principal axis and the residual plane are fixed, any choice of one-dimensional nonlinearity preserves the residual component under ideal real arithmetic.
+
+In actual implementations, the range over which exact invariance can be guaranteed is finite due to finite-precision arithmetic, clipping, and dynamic-range constraints.
+In this paper, we treat this range as the \emph{region where residual invariance effectively holds} and evaluate the property through numerical experiments.
+
+% =========================================================
+\section{A CONJ-oriented view of existing $1+2$ color spaces}
+
+\subsection{Axes of comparison (decomposition and the order of nonlinearity)}
+In this section, we organize representative $1+2$-structured color spaces using a minimal set of axes from the viewpoint of CONJ.
+Our focus is not on historical developments or implementation details of each space, but on how the relationship between the principal axis and the residual plane is affected by the presence and ordering of nonlinear operations.
+
+As representative examples, we consider YCbCr (BT.601/BT.709) \citep{itur_bt601,itur_bt709},
+CIELAB \citep{cie1976lab},
+IPT \citep{ebner1998ipt},
+ICtCp \citep{dolby2016ictcp,itur_bt2100},
+Oklab \citep{ottosson2020oklab},
+and LogLuv \citep{larson1998logluv}.
+
+We summarize the structure of each space using the following three symbols:
+\begin{itemize}
+\item $S$: a $1+2$ decomposition (splitting into a principal-axis scalar and a residual component).
+      In the notation of this paper, this corresponds to choosing $(u,\ell)$ and obtaining
+      $Y=\ell(x)$ and $r(x)=x-Yu$.
+\item $N1$: a one-dimensional nonlinearity acting only on the principal-axis scalar $Y$,
+      i.e., $Y\mapsto\varphi(Y)$, with no direct action on the other components.
+\item $N3$: a three-dimensional nonlinearity acting on all three components of the working space.
+      Typical examples include gamma correction and cube-root-type compression functions.
+\end{itemize}
+
+The column ``Residual plane'' indicates which of the following applies to the residual invariance
+(the property stated in Section~2 that the principal-axis operation does not change the position on the residual plane):
+\begin{center}
+$\checkmark$: holds exactly,\quad
+$\sim$: intended as a separation but not guaranteed exactly / holds only approximately,\quad
+$\times$: not guaranteed in general.
+\end{center}
+Table~\ref{tab:overview_simple} provides an overview.
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Key properties of $1+2$ spaces from the CONJ viewpoint (order of decomposition and nonlinearity / residual plane).
+  $S$: $1+2$ decomposition, $N1$: one-dimensional nonlinearity on the principal-axis scalar, $N3$: nonlinearity on three components.}
+  \label{tab:overview_simple}
+  \begin{tabular}{llll}
+    \toprule
+    Space & Working space $V$ & Procedure & Residual plane \\
+    \midrule
+    YCbCr (BT.601/709) & $R'G'B'$ & $N3 \rightarrow S$ & $\times$ \\
+    CIELAB & XYZ & $N3 \rightarrow S$ & $\sim$ \\
+    IPT / ICtCp & LMS-family & $N3 \rightarrow S$ & $\sim$ \\
+    Oklab & approximate LMS-family & $N3 \rightarrow S$ & $\sim$ \\
+    LogLuv & XYZ & $S \rightarrow N1$ & $\checkmark$ (reinterpretation) \\
+    \midrule
+    CONJ & arbitrary $V$ & $S \rightarrow N1$ & $\checkmark$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{$S \rightarrow N1$: applying a one-dimensional nonlinearity after decomposition}
+As shown in Section~2, once we choose a principal axis $u$ and a readout $\ell$ on a working space $V$, adopt the dual-pair normalization $\ell(u)=1$, and thereby fix the decomposition $V=\mathbb{R}u\oplus\ker\ell$, applying $N1$ only to the principal-axis scalar $Y=\ell(x)$ yields residual-plane invariance under ideal real arithmetic.
+In this sense, $S\rightarrow N1$ is a structural condition for ``nonlinearly deforming only the principal axis while keeping the residual plane fixed.''
+
+\paragraph{CONJ}
+CONJ explicitly realizes this $S\rightarrow N1$ pattern on an arbitrary working space $V$.
+That is, it first fixes the decomposition $S$ and then applies $N1$ to the principal-axis scalar.
+This ordering places crosstalk on the side where it can be excluded by design.
+
+\paragraph{LogLuv (positioning as a reinterpretation)}
+LogLuv \cite{larson1998logluv} takes linear XYZ as the working space, applies logarithmic compression (either $\log Y$ or an approximation thereof) to a luminance readout $Y=\ell_Y(x)$, and represents chromaticity by a two-dimensional parameter normalized by $Y$.
+From the procedural viewpoint, it can therefore be organized as an $S\to N1$ type: a decomposition $S$ followed by a one-dimensional nonlinearity $N1$ on the principal-axis scalar.
+Here, ``isomorphic (reinterpretation)'' means that, if we allow a change of coordinates (a basis change) on the residual plane, the formulation can be rewritten into the CONJ canonical form under the normalization $\ell(u)=1$,
+\[
+  T_\varphi(x)=\varphi(\ell(x))u+(I-u\ell)x.
+\]
+This does not claim that LogLuv was designed with CONJ in mind.
+
+\subsection{$N3 \rightarrow S$: constructing a $1+2$ form after a three-dimensional nonlinearity}
+CIELAB \citep{cie1976lab}, IPT/ICtCp \citep{ebner1998ipt,dolby2016ictcp,itur_bt2100}, and Oklab \citep{ottosson2020oklab} typically apply a three-dimensional nonlinearity $N3$ to all components of the working space first and then aggregate the result into a $1+2$ form ($N3\rightarrow S$).
+These spaces are primarily designed for perceptual convenience (e.g., handling of brightness and color differences), and in practice provide quantities that behave like a principal axis and chromatic differences.
+However, residual-plane invariance in the sense of Section~2 is not structurally guaranteed in general.
+
+Accordingly, when one manipulates only the principal-axis coordinate (e.g., $L^*$ or $L$) and applies the inverse transform, how well the position on the residual plane is preserved depends on the specific nonlinearity, matrix design choices, dynamic range, and implementation aspects such as rounding.
+Thus it cannot be claimed to be ``exactly invariant'' (denoted by $\sim$ in Table~\ref{tab:overview_simple}).
+From our viewpoint, this difference is best understood as a difference in design objectives.
+
+\subsection{Decomposition on $R'G'B'$ as the working space: positioning of YCbCr}
+YCbCr takes $R'G'B'$ (gamma-encoded RGB) as the working space and constructs a luminance-like quantity and color-difference components by linear combinations \citep{itur_bt601,itur_bt709}.
+Although it appears to be in a $1+2$ form, because gamma correction acts on all three components prior to the decomposition, independence between principal-axis operations and residual operations (residual-plane invariance) is not guaranteed in general.
+In this paper, we treat this structure as a representative example of $N3\rightarrow S$.
+
+\subsection{Summary: design degrees of freedom emphasized in this paper}
+The discussion above indicates that even when a representation appears to have a $1+2$ structure, the treatment of the residual plane changes essentially depending on whether the nonlinearity is placed before or after $S$.
+Our claim is that, prior to the specific \emph{shape} of a tone curve, what is decisive is how one chooses the principal axis $u$ and the readout $\ell$ on a working space $V$, and whether one adopts the dual-pair normalization $\ell(u)=1$ to fix $S$.
+
+In the next section, we illustrate this dual-pair normalization with concrete examples (e.g., scene-linear sRGB) and describe how fixing $(u,\ell)$ translates into an implementation.
+
+% =========================================================
+\section{Dual-pair normalization and concretization}
+
+\subsection{Dual-pair normalization (general form)}
+Let $V$ be a three-dimensional real vector space and let its algebraic dual be $V^*:=\mathrm{Hom}(V,\mathbb{R})$.
+A pair consisting of a principal-axis vector $u\in V$ and a linear functional $\ell\in V^*$ corresponds to specifying the $1+2$ decomposition (the principal-axis scalar and the residual plane) discussed in Section~2.
+
+To fix the scale freedom, we adopt the \emph{dual-pair normalization}
+\begin{equation}
+  \ell(u)=1 .
+  \label{eq:dualpair_norm_ch4}
+\end{equation}
+For a general pair $(u,\ell)$ with $\ell(u)\neq 0$, one can enforce \eqref{eq:dualpair_norm_ch4} by rescaling, for example,
+\[
+  u \leftarrow \frac{u}{\ell(u)}
+  \qquad\text{or}\qquad
+  \ell \leftarrow \frac{\ell}{\ell(u)} .
+\]
+(Since scaling $\ell$ leaves $\ker\ell$ invariant, the geometry of the residual plane does not change.)
+Hereafter, also in this section, we assume \eqref{eq:dualpair_norm_ch4} unless stated otherwise, and we keep the same notation $(u,\ell)$ after normalization.
+
+\subsection{Direct-sum decomposition and projection after normalization (minimal form for implementation)}
+Under the dual-pair normalization \eqref{eq:dualpair_norm_ch4}, define for any $x\in V$
+\begin{equation}
+  Y(x):=\ell(x),\qquad r(x):=x-\ell(x)u .
+  \label{eq:Y_r_ch4}
+\end{equation}
+Then
+\[
+  \ell(r(x))=\ell(x)-\ell(x)\ell(u)=0
+\]
+implies $r(x)\in\ker\ell$.
+Hence we obtain the direct-sum decomposition
+\begin{equation}
+  V=\mathbb{R}u\oplus\ker\ell ,
+  \label{eq:directsum_ch4}
+\end{equation}
+and the representation $x=Y(x)u+r(x)$ is unique.
+
+Define the rank-one map and the associated projection by
+\begin{equation}
+  Qx:=u\,\ell(x),\qquad P:=I-Q
+  \label{eq:PQ_ch4}
+\end{equation}
+where $I$ denotes the identity map.
+From \eqref{eq:dualpair_norm_ch4}, we have
+\[
+  Pu=u-\ell(u)u=0,\qquad P^2=P,
+\]
+so $P$ acts as a projection onto $\ker\ell$.
+
+With this notation, the CONJ transform defined in Section~2 is
+\begin{equation}
+  T_\varphi(x)=\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr) ,
+  \label{eq:conj_def_ch4}
+\end{equation}
+but for implementation it is often convenient to use the following equivalent \emph{minimal form}:
+\begin{equation}
+  T_\varphi(x)=x+\bigl(\varphi(\ell(x))-\ell(x)\bigr)\,u .
+  \label{eq:conj_minimal_ch4}
+\end{equation}
+That is, one can implement the transform by
+(1) computing $Y=\ell(x)$,
+(2) applying the one-dimensional mapping $Y\mapsto\varphi(Y)$, and
+(3) adding the difference $\Delta=\varphi(Y)-Y$ along the principal-axis direction.
+Residual-plane invariance under ideal real arithmetic has already been shown as a proposition in Section~2.
+In practice, however, finite-precision arithmetic and operations such as clipping may restrict the region where this property effectively holds.
+
+\subsection{Concrete example: normalization and a coordinate realization in scene-linear sRGB}
+As a concrete example, consider the working space to be the three-dimensional space of scene-linear sRGB,
+$V_{\mathrm{sRGB}}=\mathbb{R}^3_{\mathrm{RGB}}$ \citep{iec61966-2-1}.
+We choose the principal axis as the achromatic direction
+\[
+  u_s=(1,1,1)^\top .
+\]
+Define the luminance readout using weights $w=(w_R,w_G,w_B)^\top$ by
+\[
+  \ell_s(x)=w^\top x=w_R x_R+w_G x_G+w_B x_B .
+\]
+With a typical choice
+\[
+  w=(0.2126,\ 0.7152,\ 0.0722)^\top,
+\]
+we have $w_R+w_G+w_B=1$, hence $\ell_s(u_s)=1$ holds and the dual-pair normalization $\ell(u)=1$ is already satisfied (a representative set of Rec.\ 709 coefficients) \citep{itur_bt709}.
+(When the coefficients do not sum to $1$, one can always normalize them by the procedure in the previous subsection.)
+
+A coordinate realization of the residual plane $\ker\ell_s$ is not unique (there is freedom in choosing a basis on $\ker\ell_s$).
+For example, take two independent vectors satisfying $\ell_s(v)=0$:
+\[
+  v_1=\left(1,\ -\frac{w_R}{w_G},\ 0\right)^\top,\qquad
+  v_2=\left(1,\ 0,\ -\frac{w_R}{w_B}\right)^\top .
+\]
+One immediately verifies that $w^\top v_1=w^\top v_2=0$.
+Then
+\[
+  B:=[\,u_s\ v_1\ v_2\,]\in\mathbb{R}^{3\times 3}
+\]
+is invertible, and for $y=(Y,C_1,C_2)^\top$ we can write
+\[
+  x = B\,y = Y\,u_s + C_1 v_1 + C_2 v_2 .
+\]
+Conversely, letting $A:=B^{-1}$ yields
+\[
+  y=A x .
+\]
+Since $v_1,v_2\in\ker\ell_s$ and $\ell_s(u_s)=1$, the first row of $A$ must coincide with $\ell_s$ (i.e., $w^\top$), which guarantees that
+\[
+  Y=\ell_s(x) .
+\]
+
+Accordingly, one may implement CONJ as
+\[
+  (Y,C_1,C_2)^\top = A x,\quad
+  Y'=\varphi(Y),\quad
+  x' = B (Y',C_1,C_2)^\top,
+\]
+or, using the minimal form \eqref{eq:conj_minimal_ch4}, as
+\[
+  x' = x + (\varphi(\ell_s(x))-\ell_s(x))\,u_s .
+\]
+While the choice of coordinates on the residual plane (i.e., the choice of $v_1,v_2$) can affect numerical stability and scaling, residual-plane invariance itself is determined by $(u,\ell)$ and the normalization and does not depend on the particular coordinate realization.
+
+% =========================================================
+\subsection{An implementation example via a $3\times 3$ matrix representation (coordinate realization)}
+In this subsection, we present an explicit implementation form of the CONJ transform as a pair of $3\times 3$ matrices (a pre-transform and a post-transform) under the dual-pair normalization $\ell(u)=1$.
+This is equivalent to the definition in Section~2 and is useful when one wishes to make the coordinates on the residual plane explicit.
+
+\paragraph{(Step 1) Choose a basis for the residual plane}
+Choose two independent vectors $v_1,v_2\in V$ that span $\ker\ell$ (i.e., $\ell(v_1)=\ell(v_2)=0$).
+This choice has degrees of freedom; it suffices that $v_1$ and $v_2$ are linearly independent and that extreme numerical scaling is avoided.
+
+\paragraph{(Step 2) Basis matrix and pre/post transforms}
+Form the matrix whose columns are $u,v_1,v_2$,
+\[
+  B := [\,u\ v_1\ v_2\,]\in\mathbb{R}^{3\times 3} .
+\]
+If $u,v_1,v_2$ are linearly independent, then $B$ is invertible and we define
+\[
+  A := B^{-1} .
+\]
+Then for any $x\in V$ we have
+\[
+  y = (Y,C_1,C_2)^\top := A x,\qquad
+  x = B y = Y u + C_1 v_1 + C_2 v_2 .
+\]
+Moreover, from $\ell(u)=1$ and $\ell(v_1)=\ell(v_2)=0$ we obtain
+\[
+  \ell(x)=\ell(B y)=Y ,
+\]
+so $Y$ coincides with the readout by $\ell$.
+Therefore, the first row of $A$ coincides with $\ell$ (in its coordinate representation).
+
+\paragraph{(Step 3) Matrix form of CONJ}
+Given a tone curve $\varphi:\mathbb{R}\to\mathbb{R}$, define
+\[
+  y' := (\varphi(Y),\, C_1,\, C_2)^\top
+\]
+and output
+\[
+  x' := B y' .
+\]
+Equivalently,
+\[
+  x' = B \begin{pmatrix}\varphi(Y)\\C_1\\C_2\end{pmatrix},
+  \qquad
+  (Y,C_1,C_2)^\top = A x .
+\]
+This is equivalent to the definition \eqref{eq:conj_def} in Section~2, and in matrix form it can be implemented as ``apply a one-dimensional nonlinearity to the first component while keeping the second and third components unchanged.''
+
+\paragraph{Implementation remarks}
+Constructing $A=B^{-1}$ explicitly is useful when one wants to expose the residual-plane coordinates $(C_1,C_2)$ externally or when integrating into an existing linear-transform pipeline.
+On the other hand, if computational cost is the primary concern, the minimal form
+\[
+  x' = x + \bigl(\varphi(\ell(x))-\ell(x)\bigr)\,u
+\]
+(see \eqref{eq:conj_minimal_ch4} in the previous subsection) is more direct.
+In either implementation, finite precision and clipping may restrict the region where invariance effectively holds.
+
+% ============================================================
+\section{Numerical experiments: comparison with conventional pipelines}
+\label{sec:experiments}
+
+In this section, we validate by numerical experiments that the \textbf{choice of the dual pair $(u,\ell)$ defining the principal axis and the residual subspace, together with the normalization condition $\ell(u)=1$}, decisively determines chroma invariance under the ordering of one-axis nonlinear operations—namely, whether we apply \emph{nonlinearity$\to$decomposition} or \emph{decomposition$\to$nonlinearity}.
+
+\paragraph{Reader's guide (purpose of this section)}
+The comparison in this section is not intended to reproduce strictly standard-compliant pipelines.
+Rather, it is a \textbf{reduced model} designed to visualize how the difference in ordering—placing a nonlinearity before the $1+2$ decomposition (nonlinearity$\to$decomposition) versus after it (decomposition$\to$nonlinearity)—appears as crosstalk in the residual component when mapped back to the scene-linear layer.
+Notations such as sRGB/XYZ/BT.709 are used to represent typical definitions commonly encountered in practice.
+
+\subsection*{Notation}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Symbol & Meaning \\
+\midrule
+$V$ & Color vector space (e.g., $\mathbb{R}^3$)\\
+$x$ & Sample (pixel) vector (RGB/XYZ, etc.)\\
+$u$ & Principal-axis vector (achromatic axis, luminance axis, etc.)\\
+$\ell$ & Readout functional (principal-axis scalar; e.g., $\ell(x)=c^\top x$)\\
+$\ell(u)=1$ & Dual-pair normalization (consistency between axis and readout)\\
+$P(x)$ & Residual projection: $P(x)=x-\ell(x)u\in\ker\ell$\\
+$r(x)$ & Residual: $r(x)=P(x)$\\
+$\phi$ & 1D tone function (e.g., $\phi(s)=\max(s,0)^\alpha$)\\
+$\alpha$ & Exponent parameter of the tone function\\
+$\gamma$ & Gamma correction (nonlinearity on the legacy side; reduced model)\\
+$F$ & Mapping representing an entire pipeline (Legacy/CONJ)\\
+$D$ & Evaluation sample set (random samples or a pixel set)\\
+$C(F;D)$ & Crosstalk metric (Eq.~\eqref{eq:crosstalk})\\
+$\Sigma,\ \Delta\Sigma$ & Residual covariance and its change (Eq.~\eqref{eq:deltasigma})\\
+$\|\cdot\|_2,\ \|\cdot\|_F$ & $\ell_2$ norm and Frobenius norm\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Setup: reference spaces and normalization of the dual pair}
+\label{subsec:setup}
+
+All evaluations are performed in the scene-linear layer.
+We first generate linear-sRGB samples $x\in[0,1]^3$ and obtain XYZ samples by a linear transform:
+\[
+x_{\mathrm{XYZ}} = M_{\mathrm{sRGB}\to\mathrm{XYZ}}\,x_{\mathrm{sRGB}} .
+\]
+In the implementation, small negative values caused by numerical error are clipped to $0$.
+The sRGB$\leftrightarrow$XYZ conversion used here follows the standard definition with the D65 white point
+\citep{iec61966-2-1,cie15_2018}.
+
+\paragraph{Normalization on the XYZ side}
+On $V_{\mathrm{XYZ}}=\mathbb{R}^3$, we set the principal axis to coincide with the physical luminance $Y$:
+\[
+u_Y := (0,1,0),\qquad \ell_Y(x):=x_Y .
+\]
+Then $\ell_Y(u_Y)=1$ holds.
+
+\paragraph{Normalization on the sRGB side}
+On the sRGB space $V_{\mathrm{sRGB}}=\mathbb{R}^3$, we define $\ell_s$ as
+the $Y$ component after mapping linear sRGB to XYZ:
+\[
+\ell_s(x) := \bigl(M_{\mathrm{sRGB}\to\mathrm{XYZ}}\,x\bigr)_Y .
+\]
+We define the principal axis $u_s$ by pulling back the XYZ-side axis $u_Y$ to the sRGB side:
+\[
+u_s := M_{\mathrm{XYZ}\to\mathrm{sRGB}}\,u_Y .
+\]
+With these definitions, the normalization
+\[
+\ell_s(u_s)=1
+\]
+is satisfied automatically.
+
+\subsection{Metrics}
+\label{subsec:metrics}
+
+We define the projection (residual extraction) by
+\[
+P(x) := x-\ell(x)u \in \ker\ell .
+\]
+
+\paragraph{Crosstalk metric}
+For a sample set $D$ and a self-map $F:V\to V$, we define
+\begin{equation}
+C(F;D)
+:=\frac{1}{|D|}\sum_{x\in D}\|P(F(x))-P(x)\|_2^2 .
+\label{eq:crosstalk}
+\end{equation}
+The condition $C(F;D)=0$ means that the residual is exactly invariant on $D$.
+
+\paragraph{Change in chroma covariance}
+Let the covariance of the residual $r(x)=P(x)$ be
+\[
+\Sigma_{\mathrm{chroma}}(D)
+:=\frac{1}{|D|}\sum_{x\in D}(r(x)-\bar r)(r(x)-\bar r)^\top,
+\quad
+\bar r:=\frac{1}{|D|}\sum_{x\in D}r(x) .
+\]
+We measure the change by
+\begin{equation}
+\Delta\Sigma(F)
+:=\bigl\|
+\Sigma_{\mathrm{chroma}}(F(D))-\Sigma_{\mathrm{chroma}}(D)
+\bigr\|_F .
+\label{eq:deltasigma}
+\end{equation}
+
+\subsection{Experiment 1: sRGB side (legacy vs.\ CONJ)}
+\label{subsec:exp_srgb}
+
+We take the reference space to be $V_{\mathrm{sRGB}}$ and use $(u_s,\ell_s)$ defined above.
+The sample set is
+\[
+D_{\mathrm{sRGB}}
+:=\{x_i\}_{i=1}^N,\quad
+x_i\sim\mathrm{Unif}([0,1]^3) .
+\]
+
+\paragraph{Legacy pipeline (reduced model)}
+As a representative example of applying a nonlinearity first and then performing a $1+2$ decomposition, we use the composite map
+\[
+F^{(s)}_{\mathrm{legacy}}
+:=\gamma^{-1}\circ T^{-1}_{Y'CbCr}
+\circ T_{Y'}\circ T_{Y'CbCr}\circ\gamma .
+\]
+Here,
+\[
+\gamma(x)=x^{1/\gamma},\quad
+\gamma^{-1}(x)=x^\gamma,
+\]
+$T_{Y'CbCr}$ is a simplified $R'G'B'\leftrightarrow Y'CbCr$ transform based on BT.709 coefficients, and $T_{Y'}$ is
+\[
+Y'\mapsto \mathrm{clip}(Y',0,1)^\alpha .
+\]
+
+\paragraph{Remark (reduction in the legacy model)}
+Our $R'G'B'\leftrightarrow Y'CbCr$ transform is a \textbf{simplified model} meant to represent the order mismatch, and is not intended to reproduce transmission-accurate implementations in standards, including limited/full range handling, offsets, or quantization.
+See Appendix~B for the explicit formulas used.
+
+\paragraph{CONJ pipeline}
+In CONJ, we perform the decomposition in the scene-linear layer and apply the nonlinearity only to the principal-axis component:
+\[
+F^{(s)}_{\mathrm{conj}}(x)
+=\phi(\ell_s(x))u_s+\bigl(x-\ell_s(x)u_s\bigr),
+\quad
+\phi(s)=\max(s,0)^\alpha .
+\]
+
+\subsection{Experiment 2: XYZ/Lab side (Lab processing vs.\ CONJ on XYZ)}
+\label{subsec:exp_lab}
+
+We map the same samples to XYZ and form
+\[
+D_{\mathrm{XYZ}}
+:=\{M_{\mathrm{sRGB}\to\mathrm{XYZ}}x_i\}_{i=1}^N .
+\]
+The evaluation is performed on scene-linear XYZ, using $(u_Y,\ell_Y)$ as the dual pair.
+
+\paragraph{CIELAB-based legacy procedure}
+We compare against the following mapping:
+\[
+F_{\mathrm{Lab\text{-}legacy}}
+:=T^{-1}_{\mathrm{Lab}\to\mathrm{XYZ}}
+\circ T_{L^*}\circ
+T_{\mathrm{XYZ}\to\mathrm{Lab}} .
+\]
+Here, $T_{L^*}$ is defined by
+\[
+L^*\mapsto
+100\cdot\mathrm{clip}\!\left(\frac{L^*}{100},0,1\right)^\alpha ,
+\]
+while $a^*,b^*$ are preserved.
+In this experiment, after applying the $L^*$ operation in Lab space, we map back to scene-linear XYZ and then evaluate the residual.
+
+\paragraph{CONJ on XYZ}
+\[
+F_{\mathrm{XYZ\text{-}conj}}(x)
+=\phi(\ell_Y(x))u_Y+\bigl(x-\ell_Y(x)u_Y\bigr),
+\quad
+\phi(s)=\max(s,0)^\alpha .
+\]
+
+\subsection{Results}
+\label{subsec:results}
+
+\begin{table}[t]
+  \centering
+  \caption{Evaluation results for uniformly random samples
+  ($N=100\,000$, $\alpha=0.8$, $\gamma=2.2$).}
+  \label{tab:exp_results}
+  \begin{tabular}{lcc}
+    \toprule
+    Mapping $F$ & $C(F;D)$ & $\Delta\Sigma(F)$ \\
+    \midrule
+    sRGB: Legacy & $4.62\times10^{-2}$ & $3.27\times10^{-2}$ \\
+    sRGB: CONJ   & $4.38\times10^{-32}$ & $2.28\times10^{-17}$ \\
+    XYZ/Lab: Legacy & $1.25\times10^{-2}$ & $1.42\times10^{-2}$ \\
+    XYZ: CONJ   & $0$ & $0$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+On both the sRGB side and the XYZ/Lab side, the legacy ordering (nonlinearity$\to$decomposition) leaves residual variations on the order of $10^{-2}$ when evaluated after mapping back to the scene-linear layer.
+In contrast, CONJ—where the decomposition is performed first under the dual-pair normalization $\ell(u)=1$—reduces residual variation to the level of machine precision in double-precision arithmetic.
+
+In particular, the results $C(F;D)=0$ and $\Delta\Sigma(F)=0$ for CONJ on XYZ numerically reflect the fact that the direct-sum decomposition induced by $\ell_Y(u_Y)=1$ is algebraically exact.
+
+% ============================================================
+\section{Validation on a real photograph}
+\label{sec:real_image}
+
+\subsection{Input and preprocessing (unifying to linear light)}
+The input is an 8-bit RGB image (JPEG) encoded in sRGB, normalized to $[0,1]$.
+Since the $1+2$ decomposition (principal axis + residual) in this paper is defined and evaluated in \textbf{linear light},
+we apply the inverse sRGB EOTF $E^{-1}$ to the input $x_{\mathrm{srgb}}$ and obtain
+\begin{equation}
+  x_{\mathrm{lin}} := E^{-1}(x_{\mathrm{srgb}}).
+\end{equation}
+
+\noindent
+\textit{(Note)} $E^{-1}$ denotes the inverse sRGB EOTF applied per channel; the explicit formula is given in Appendix~B.
+
+\subsection{Dual pair (definition of the principal axis and the residual)}
+We define the readout $\ell(x)=c^\top x$ using the linear luminance coefficients of Rec.\,709 / sRGB,
+\[
+  c := (0.2126,\;0.7152,\;0.0722).
+\]
+For the achromatic axis we use
+\[
+  u := (1,1,1),
+\]
+and assume it has been normalized so that $\ell(u)=1$.
+Then each pixel $x$ is uniquely decomposed as
+\begin{equation}
+  x = \ell(x)\,u + r(x),\qquad r(x):=x-\ell(x)\,u\in \ker\ell .
+\end{equation}
+
+\subsection{One-axis tone function}
+We use the one-axis tone function
+\begin{equation}
+  \varphi_\alpha(s) := \mathrm{clip}(s,0,1)^\alpha,
+\end{equation}
+with the default $\alpha=0.8$.
+
+\subsection{Two pipelines to be compared}
+For a real image, we compare the following two pipelines (all evaluations are performed in linear light).
+
+\paragraph{(A) CONJ (decompose in linear light $\rightarrow$ apply a nonlinearity only to the principal axis $\rightarrow$ recompose)}
+\begin{align}
+  x_{\mathrm{lin}} &:= E^{-1}(x_{\mathrm{srgb}}),\\
+  Y_{\mathrm{lin}} &:= \ell(x_{\mathrm{lin}}),\qquad r_{\mathrm{lin}}:=x_{\mathrm{lin}}-Y_{\mathrm{lin}}u,\\
+  x_{\mathrm{conj,lin}} &:= \varphi_\alpha(Y_{\mathrm{lin}})\,u + r_{\mathrm{lin}}.
+\end{align}
+
+\paragraph{(B) Legacy (decompose in a nonlinear (sRGB) space $\rightarrow$ apply a principal-axis nonlinearity $\rightarrow$ recompose)}
+As a reduced model representing the order mismatch of ``performing the decomposition in a nonlinear space,''
+we define the legacy pipeline by
+\begin{align}
+  Y_{\mathrm{gam}} &:= \ell(x_{\mathrm{srgb}}),\qquad r_{\mathrm{gam}}:=x_{\mathrm{srgb}}-Y_{\mathrm{gam}}u,\\
+  x_{\mathrm{legacy,srgb}} &:= \mathrm{clip}\bigl(\varphi_\alpha(Y_{\mathrm{gam}})\,u + r_{\mathrm{gam}},\,0,1\bigr),\\
+  x_{\mathrm{legacy,lin}} &:= E^{-1}(x_{\mathrm{legacy,srgb}}),
+\end{align}
+where the clipping enforces the range $[0,1]$.
+
+\subsection{Evaluation metrics (linear light)}
+Let the residuals in linear light be
+\[
+  r_{\mathrm{orig}}:=r(x_{\mathrm{lin}}),\quad
+  r_{\mathrm{conj}}:=r(x_{\mathrm{conj,lin}}),\quad
+  r_{\mathrm{legacy}}:=r(x_{\mathrm{legacy,lin}}),
+\]
+where $r(x)=x-\ell(x)u$.
+
+\paragraph{Crosstalk magnitude}
+For the pixel set $D_{\mathrm{img}}$, we use
+\begin{equation}
+  C_{\mathrm{img}} := \frac{1}{|D_{\mathrm{img}}|}\sum_{p\in D_{\mathrm{img}}}
+  \left\| r_{\mathrm{out}}(p)-r_{\mathrm{orig}}(p)\right\|_2^2,
+\end{equation}
+with $\mathrm{out}\in\{\mathrm{conj},\mathrm{legacy}\}$.
+
+\paragraph{Change in chroma covariance}
+Using the centered covariance of residuals
+\[
+  \Sigma(r):=\mathbb{E}\bigl[(r-\mathbb{E}[r])(r-\mathbb{E}[r])^\top\bigr],
+\]
+we evaluate
+\begin{equation}
+  \Delta\Sigma_{\mathrm{img}} := \left\|\Sigma(r_{\mathrm{out}})-\Sigma(r_{\mathrm{orig}})\right\|_F
+\end{equation}
+with the Frobenius norm.
+
+\subsection{Results}
+Table~\ref{tab:real_results} shows the results for the image \texttt{YKT\_3336.jpg} with $\alpha=0.8$.
+Due to residual invariance, CONJ suppresses $C_{\mathrm{img}}$ and $\Delta\Sigma_{\mathrm{img}}$ down to the rounding-error level of double-precision arithmetic,
+whereas the legacy pipeline exhibits observable residual variations caused by the order mismatch of performing the decomposition in a nonlinear space.
+
+\begin{table}[t]
+\centering
+\caption{Crosstalk evaluation on a real photograph (\texttt{YKT\_3336}, $\alpha=0.8$), evaluated in linear light.}
+\label{tab:real_results}
+\begin{tabular}{lcc}
+\hline
+ & Legacy & CONJ \\
+\hline
+$C_{\mathrm{img}}$ & $6.9615\times 10^{-4}$ & $8.2927\times 10^{-33}$ \\
+$\Delta\Sigma_{\mathrm{img}}$ (Fro) & $3.5171\times 10^{-3}$ & $9.4495\times 10^{-18}$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Remarks (implementation details)}
+This experiment uses an 8-bit JPEG as input and therefore includes quantization error at the input stage.
+The legacy pipeline also includes clipping to $[0,1]$, so the measured values include the effect of out-of-gamut handling.
+Nevertheless, the comparison focuses on the ordering difference—whether the decomposition is performed in linear light or in sRGB space—when applying the same 1D tone function,
+and the evaluation is conducted in linear light so as to remain consistent with the definition of the $1+2$ decomposition.
+
+% ============================================================
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this paper, we introduced CONJ as a minimal framework for treating, in a consistent manner on the scene-linear (linear-light) domain,
+the widely recurring $1+2$ structure in color spaces, namely a decomposition into a one-dimensional principal axis and a two-dimensional residual.
+CONJ is built from a direct-sum decomposition induced by a dual pair $(u,\ell)$ and a one-axis nonlinear operator.
+
+The point of this paper is not to argue the superiority of any specific existing color space or coding scheme.
+Rather, we emphasize that the \textbf{choice of the pair $(u,\ell)$ determining the principal axis and the residual, together with the normalization condition}
+\begin{equation}
+  \ell(u)=1,
+\end{equation}
+\emph{structurally determines} the independence between principal-axis processing and residual processing (i.e., crosstalk suppression).
+
+Under this normalization, any $x\in V$ admits the unique decomposition
+\begin{equation}
+  x=\ell(x)\,u+r,\qquad r\in\ker\ell,
+\end{equation}
+and hence $V=\mathrm{span}(u)\oplus\ker\ell$ holds.
+Based on this decomposition, defining the CONJ operator that applies a one-axis nonlinearity $\varphi$ only to the principal scalar,
+\begin{equation}
+  T_\varphi(x)
+  =\varphi(\ell(x))\,u+\bigl(x-\ell(x)u\bigr),
+  \label{eq:conj_conclusion}
+\end{equation}
+we showed that, under ideal real-arithmetic, the residual $r$ is algebraically invariant, independent of the specific form of $\varphi$.
+
+Representative color spaces such as sRGB, YCbCr, CIELAB, IPT, ICtCp, and Oklab exhibit a $1+2$ structure in appearance,
+but many of them are designed in the form ``apply a nonlinearity first, then introduce a $1+2$ decomposition,''
+i.e., the $N3\rightarrow S$ type.
+In this case, when one pulls the signal back to the scene-linear domain and evaluates the residual,
+residual invariance in the CONJ sense is not guaranteed in general.
+We organized this point structurally.
+
+In numerical experiments on scene-linear sRGB and scene-linear XYZ,
+we compared a legacy pipeline (nonlinearity $\rightarrow$ decomposition) with a CONJ-type pipeline (decomposition $\rightarrow$ one-axis nonlinearity).
+While the legacy pipeline exhibited residual variations on the order of $10^{-2}$,
+the CONJ-type pipeline reduced them down to the rounding-error level of double-precision floating-point arithmetic.
+
+Moreover, in the validation on a real photograph, when applying the same one-axis tone operation,
+CONJ reduced $C_{\mathrm{img}}$ and $\Delta\Sigma_{\mathrm{img}}$ to the rounding-error level,
+confirming that contamination into the residual component is strongly suppressed.
+In contrast, the reduced legacy procedure that performs the decomposition in a nonlinear (sRGB) space exhibited remaining residual variation
+when evaluated on the scene-linear domain.
+This is consistent with our organization that the ordering between decomposition and one-axis nonlinearity governs the amount of crosstalk.
+
+The residual invariance established in this paper is an algebraic property of \eqref{eq:conj_conclusion}.
+In practical implementations, however, its validity can be limited by finite-precision arithmetic, quantization (e.g., 3D LUTs),
+and operations involving clipping or out-of-gamut handling.
+Accordingly, an important next step is to quantify, under implementation constraints,
+``to what extent the residual can be treated as effectively invariant,''
+and to examine its relationship to coding efficiency and perceptual difference metrics.
+
+In summary, CONJ provides a minimal and general template for organizing and redesigning color-space design and coding operations in the scene-linear domain,
+in that it enables \textbf{(i) preserving the linear structure of the principal axis and the residual plane, while
+(ii) introducing nonlinear degrees of freedom only along the principal axis.}
+
+\paragraph{Code availability.}
+A reference implementation and experiment scripts corresponding to this preprint are available in the following GitHub repository:
+\url{https://github.com/goldkiss2010-ai/conj-preprint}.
+
+% ============================================================
+\section{Outlook: discussion points for follow-up research}
+\label{sec:future}
+
+Within the scope of this paper, we showed that CONJ, defined under the dual-pair normalization $\ell(u)=1$,
+preserves the residual plane under ideal real-arithmetic, and that its numerical crosstalk behavior differs substantially from representative legacy procedures
+(Section~\ref{sec:experiments}).
+Here we briefly list discussion points that are suitable to be separated as follow-up work.
+
+\subsection{``Effective invariance'' under finite precision and quantization}
+\label{subsec:future_quant}
+While residual invariance is an algebraic property, finite precision dominates in implementations.
+It is therefore useful to quantify the ``region where invariance holds in practice'' as a function of:
+\begin{itemize}
+  \item floating-point precision (float64/float32/fp16) and fixed-point implementations,
+  \item 3D LUT quantization (e.g., $17^3,33^3,65^3$) and interpolation (trilinear/tetrahedral, etc.),
+  \item the placement of rounding within a pipeline (pre-transform / $\varphi$ / post-transform).
+\end{itemize}
+As metrics, the $C(F;D)$ and $\Delta\Sigma(F)$ defined in Section~\ref{sec:experiments} can be re-measured under each quantization condition for direct comparison.
+
+\subsection{Operating conditions including clipping and out-of-gamut handling}
+\label{subsec:future_clip}
+Because residual invariance relies on the structure on $\ker\ell$, clipping and out-of-gamut handling become major sources of violation.
+It is desirable to separate and evaluate:
+\begin{itemize}
+  \item no clipping (ideal) vs.\ clipping at each stage (operational),
+  \item differences among out-of-gamut strategies (simple clipping / projection / gamut mapping),
+  \item the coupling between $\varphi$ and range management in HDR (large dynamic range).
+\end{itemize}
+This point can be organized as a trade-off between the design goal ``preserve the residual plane'' and the projection to safe display/coding domains.
+
+\subsection{Systematizing the choice/estimation of $(u,\ell)$}
+\label{subsec:future_pair}
+This paper focused on properties given a fixed $(u,\ell)$, but in practice the key question is ``which $(u,\ell)$ is desirable.''
+Natural directions include:
+\begin{itemize}
+  \item standard-based fixed choices (e.g., $Y$ in $XYZ$, linear luminance based on standard matrices),
+  \item data-driven choices (e.g., local PCA/KLT-type selection, or objective-based optimization),
+  \item conditional choices (scene-dependent / exposure-region-dependent) and suppressing discontinuities due to switching.
+\end{itemize}
+Evaluation can be formulated as multi-objective optimization, incorporating not only crosstalk but also amplification of quantization error and clipping robustness.
+
+\subsection{Connecting to coding and editing pipelines}
+\label{subsec:future_codec}
+The separation in CONJ---``a 1D nonlinearity on the principal scalar'' and ``preservation of the residual plane''---is convenient as a design unit in coding and editing.
+Possible topics include:
+\begin{itemize}
+  \item principal-axis formulation of tone mapping / exposure adjustment and stable preservation of chromatic difference components,
+  \item the possibility of reducing crosstalk by redesigning the decomposition order for existing $1+2$ representations (e.g., YCbCr),
+  \item linking rate control / quantization to residual statistics (e.g., $\Delta\Sigma$).
+\end{itemize}
+These are best viewed not as extensions of the theoretical claim itself, but as engineering studies that measure the attainable gains under operational constraints.
+
+% ============================================================
+\appendix
+\section{$1+2$ Decomposition and One-Axis Nonlinear Operators from a Dual Pair}
+\label{app:dualpair}
+
+\subsection{Setup and notation}
+Let $V$ be a real vector space and $V^*:=\mathrm{Hom}(V,\mathbb{R})$ its algebraic dual.
+We write the evaluation pairing as
+\[
+\langle \ell, x\rangle := \ell(x)\qquad (\ell\in V^*,\,x\in V).
+\]
+
+\subsection{A dual pair and the associated projections}
+\begin{definition}[(Normalized) dual pair and associated projections]
+Let $u\in V$ and $\ell\in V^*$ satisfy
+\[
+\langle \ell,u\rangle = 1.
+\]
+Then we call $(u,\ell)$ a (normalized) dual pair.
+Define linear maps $Q,P:V\to V$ by
+\[
+Q(x) := \langle \ell,x\rangle\,u,\qquad P := I-Q,
+\]
+where $I$ denotes the identity map.
+\end{definition}
+
+\begin{lemma}[Rank-one projections and the $1+2$ decomposition]
+For the maps $Q$ and $P$ defined above, the following identities hold:
+\[
+Q^2=Q,\quad P^2=P,\quad PQ=QP=0.
+\]
+Moreover,
+\[
+\mathrm{Im}\,Q=\mathrm{span}(u),\qquad \ker Q=\ker \ell,\qquad \mathrm{Im}\,P=\ker\ell .
+\]
+Consequently, the direct-sum decomposition
+\[
+V=\mathrm{span}(u)\oplus \ker\ell
+\]
+holds, and every $x\in V$ can be written uniquely as
+\[
+x = \underbrace{\langle \ell,x\rangle}_{=:Y(x)}u + \underbrace{P(x)}_{=:r(x)},\qquad r(x)\in\ker\ell .
+\]
+\end{lemma}
+
+\begin{proof}
+For any $x\in V$,
+\[
+Q^2(x)=Q(\langle \ell,x\rangle u)=\langle \ell,x\rangle\langle \ell,u\rangle u=Q(x),
+\]
+hence $Q^2=Q$. Since $P=I-Q$, we have
+$P^2=(I-Q)^2=I-2Q+Q^2=I-Q=P$.
+Also,
+$PQ=P(I-P)=P-P^2=0$, and similarly $QP=(I-P)P=0$.
+
+For the images, $\mathrm{Im}\,Q=\mathrm{span}(u)$ follows from $Q(x)=\langle \ell,x\rangle u$.
+For the kernel,
+\[
+Q(x)=0 \iff \langle \ell,x\rangle=0 \iff x\in\ker\ell,
+\]
+so $\ker Q=\ker\ell$.
+
+Next we show $\mathrm{Im}\,P=\ker\ell$.
+If $x\in\ker\ell$, then $Q(x)=0$ and thus $P(x)=x$, hence $\ker\ell\subset \mathrm{Im}\,P$.
+Conversely, for any $x$,
+\[
+\langle \ell,P(x)\rangle=\langle \ell,x-Q(x)\rangle
+=\langle \ell,x\rangle-\langle \ell,x\rangle\langle \ell,u\rangle=0,
+\]
+so $\mathrm{Im}\,P\subset\ker\ell$. Therefore $\mathrm{Im}\,P=\ker\ell$.
+
+Finally, for any $x$ we have $x=Q(x)+P(x)$ with $Q(x)\in\mathrm{span}(u)$ and $P(x)\in\ker\ell$.
+To see that the intersection is trivial, let $v\in \mathrm{span}(u)\cap\ker\ell$.
+Write $v=au$. Then
+$0=\langle \ell,v\rangle=a\langle \ell,u\rangle=a$, hence $a=0$ and $v=0$.
+This proves the direct-sum decomposition and uniqueness of the representation.
+\end{proof}
+
+\subsection{One-axis nonlinear operators (residual invariance)}
+\begin{definition}[One-axis nonlinear operator]
+Given a function $\varphi:\mathbb{R}\to\mathbb{R}$, define $T_\varphi:V\to V$ by
+\[
+T_\varphi(x):=\varphi(\langle \ell,x\rangle)u + P(x).
+\]
+\end{definition}
+
+\begin{lemma}[Residual invariance (projection form)]
+For the map $T_\varphi$ defined above, for any $x\in V$,
+\[
+P(T_\varphi(x))=P(x)
+\]
+holds.
+\end{lemma}
+
+\begin{proof}
+Using $P(u)=0$ and $P^2=P$,
+\[
+P(T_\varphi(x))
+= P\bigl(\varphi(\langle \ell,x\rangle)u + P(x)\bigr)
+= \varphi(\langle \ell,x\rangle)P(u) + P^2(x)
+= P(x).
+\]
+\end{proof}
+\section{Definitions of the simplified transforms used in the experiments (supplement)}
+\subsection{Simplified $R'G'B' \leftrightarrow Y'CbCr$ (full range)}
+In the Legacy pipeline, we use a simplified full-range transform based on the BT.709
+luma coefficients $(K_r,K_g,K_b)=(0.2126,0.7152,0.0722)$
+in order to represent the effect of order inconsistency.
+We do not model offsets or quantization ranges in the standard.
+
+\paragraph{Forward transform}
+\[
+Y' = K_r R' + K_g G' + K_b B',
+\quad
+Cb = \frac{B'-Y'}{2(1-K_b)},
+\quad
+Cr = \frac{R'-Y'}{2(1-K_r)}.
+\]
+
+\paragraph{Inverse transform}
+\[
+R' = Y' + 2(1-K_r)\,Cr,
+\quad
+B' = Y' + 2(1-K_b)\,Cb,
+\quad
+G' = \frac{Y' - K_r R' - K_b B'}{K_g}.
+\]
+
+\subsection{Inverse sRGB EOTF (reconstruction to linear light)}
+In the real-image experiment, to unify the input $x_{\mathrm{srgb}}\in[0,1]$ in linear light,
+we apply the inverse sRGB EOTF component-wise:
+\[
+E^{-1}(v)=
+\begin{cases}
+\frac{v}{12.92}, & v\le 0.04045,\\[4pt]
+\left(\frac{v+0.055}{1.055}\right)^{2.4}, & v>0.04045.
+\end{cases}
+\]
+
+\noindent
+\textit{Note.} These formulas are simplified forms that omit conditions required for a fully
+standard-compliant implementation (coding range, quantization, offsets, etc.).
+They are used in this paper to make the effect of order inconsistency explicit.
+
+% ============================================================
+% Bibliography
+% ============================================================
+\bibliographystyle{unsrtnat}
+\bibliography{CONJ_updated_plus_cc}
+
+\end{document}
