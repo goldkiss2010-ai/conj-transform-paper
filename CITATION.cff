@@ -2,29 +2,27 @@ cff-version: 1.2.0
 message: "If you use this work, please cite the preprint and this reproducibility repository."
 title: "CONJ Transform Paper v0.9: Reproducibility Repository"
 authors:
-
-* family-names: "Yokota"
-  given-names: "Bungaku"
-  version: "v0.9-paper-archive"
-  date-released: "2026-06-20"
-  repository-code: "https://github.com/goldkiss2010-ai/conj-transform-paper"
-  url: "https://github.com/goldkiss2010-ai/conj-transform-paper"
-  license: "Apache-2.0"
-  abstract: "Reproducibility repository for the self-published CONJ Transform preprint paper, including scripts, assets, and numerical experiment materials."
-  keywords:
-* color science
-* image processing
-* reproducible research
-* luminance
-* CONJ transform
+  - family-names: "Yokota"
+    given-names: "Bungaku"
+version: "v0.9-paper-archive-2"
+date-released: "2026-06-20"
+repository-code: "https://github.com/goldkiss2010-ai/conj-transform-paper"
+url: "https://github.com/goldkiss2010-ai/conj-transform-paper"
+license: "Apache-2.0"
+abstract: "Reproducibility repository for the self-published CONJ Transform preprint paper, including scripts, assets, and numerical experiment materials."
+keywords:
+  - color science
+  - image processing
+  - reproducible research
+  - luminance
+  - CONJ transform
 
 preferred-citation:
-type: article
-title: "CONJ: Dual-Pair-Based 1+2 Decomposition with Residual Invariance"
-authors:
-- family-names: "Yokota"
-given-names: "Bungaku"
-year: 2026
-month: 2
-version: "v0.9"
-notes: "Self-published preprint, not peer-reviewed. See paper/CONJ_paper_20260208.pdf."
+  type: article
+  title: "CONJ: Dual-Pair-Based 1+2 Decomposition with Residual Invariance"
+  authors:
+    - family-names: "Yokota"
+      given-names: "Bungaku"
+  year: 2026
+  month: 2
+  version: "v0.9"
